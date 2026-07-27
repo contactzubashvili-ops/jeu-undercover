@@ -28,7 +28,7 @@ const S = {
   state: null,            // dernier instantané public
   secret: null,           // { role, word } — le mien uniquement
   nameDraft: '', codeDraft: '',
-  clueDraft: '', guessDraft: '',
+  clueDraft: '', guessDraft: '', ladderThemeDraft: '',
   config: { mode: 'both', difficulty: 'any', category: 'any', clueSeconds: 45, discussionSeconds: 90, voteSeconds: 45, rounds: 3 },
   facettes: null,
   roleRevealed: false,
@@ -350,8 +350,27 @@ function selectedGamePanel(st, isHost) {
   if (g.id === 'undercover') body.append(undercoverConfig(st, isHost));
   else if (g.id === 'fusion') body.append(fusionConfig(st, isHost));
   else if (g.id === 'pinturillo') body.append(pinturilloConfig(st, isHost));
+  else if (g.id === 'ladder') body.append(ladderConfig(st, isHost));
   else if (!g.available) body.append(h('p', { class: 'hint-line' }, '⏳ Ce jeu arrive très bientôt sur la plateforme.'));
   return body;
+}
+
+function ladderConfig(st, isHost) {
+  const c = st.config;
+  const themes = c.ladderThemes || [];
+  if (!isHost) return h('div', { class: 'muted small' }, `${c.rounds} manche(s) · ${themes.length ? themes.length + ' échelle(s) perso' : 'échelles par défaut'}`);
+  const add = () => { const v = (S.ladderThemeDraft || '').trim(); if (!v) return; send({ t: 'config', patch: { ladderThemes: [...themes, v] } }); S.ladderThemeDraft = ''; };
+  const inp = h('input', { class: 'input', id: 'ladder-theme-input', maxlength: 80, placeholder: 'ex. Puissance dans Naruto', value: S.ladderThemeDraft || '', oninput: (e) => { S.ladderThemeDraft = e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') add(); } });
+  const chips = h('div', { class: 'chip-row' }, ...themes.map((t, i) => h('button', { class: 'chip on', title: 'Retirer', onclick: () => send({ t: 'config', patch: { ladderThemes: themes.filter((_, j) => j !== i) } }) }, t + ' ✕')));
+  return h('div', { class: 'stack' },
+    field('Manches', cfgNum('rounds', c.rounds, 1, 10)),
+    h('div', { class: 'field' },
+      h('label', { class: 'lbl-row' }, h('span', {}, 'Échelles perso'), h('span', { class: 'muted small' }, themes.length ? `${themes.length} ajoutée(s)` : 'aucune')),
+      h('div', { style: 'display:flex;gap:8px' }, inp, h('button', { class: 'btn btn-primary btn-sm', onclick: add }, 'Ajouter')),
+      themes.length ? chips : '',
+    ),
+    themes.length ? toggleRow('N’utiliser que mes échelles', c.ladderOnlyCustom, (v) => send({ t: 'config', patch: { ladderOnlyCustom: v } })) : '',
+  );
 }
 
 function pinturilloConfig(st, isHost) {
@@ -635,6 +654,24 @@ function viewClues() {
     }
     w.append(h('div', { class: 'card stack' }, h('div', { class: 'kicker' }, 'Indices de ce tour'), list));
   }
+
+  // Prêt à voter — disponible À TOUT MOMENT pendant les indices.
+  const d = st.discussion || {};
+  if (d.enabled) {
+    const iReady = d.readyIds && d.readyIds.includes(S.playerId);
+    const card = h('div', { class: 'card stack center' },
+      h('div', { class: 'kicker' }, 'Prêt à voter ?'),
+      h('div', { class: 'vote-progress' }, `${d.readyCount} / ${d.needed} nécessaires · ${d.totalAlive} en jeu`),
+      h('div', { class: 'vote-bar' }, h('i', { style: `width:${pct(d.readyCount, d.needed)}%` })),
+    );
+    if (me && me.alive) {
+      card.append(h('button', { class: iReady ? 'btn btn-primary' : 'btn btn-violet', onclick: () => send({ t: 'voteReady', value: !iReady }) },
+        iReady ? '✅ Prêt — on attend les autres' : '🗳️ Je suis prêt à voter'));
+    }
+    card.append(h('p', { class: 'hint-line' }, 'Le vote part dès que la majorité est prête — sinon on continue les indices à l’infini !'));
+    w.append(card);
+  }
+  if (isHost) w.append(h('button', { class: 'btn btn-ghost btn-sm', style: 'align-self:center', onclick: () => send({ t: 'openVote' }) }, '🗳️ Ouvrir le vote maintenant'));
 
   w.append(playersStrip());
 
@@ -939,11 +976,20 @@ function gameTopbar(sub) {
   const st = S.state;
   // Le code n'est utile qu'au salon (grand encart dédié) : inutile en jeu.
   const enLobby = st.phase === 'lobby';
+  const isHost = st.hostId === S.playerId;
   return h('div', { class: 'topbar' },
     h('span', { class: 'brand' }, '🕵️ Undercover'),
     enLobby ? h('span', { class: 'pill' }, 'Code ', h('b', {}, st.code)) : '',
     h('span', { class: 'spacer' }),
     h('span', { class: 'pill' }, sub),
+    // Revenir au menu à tout moment pendant la partie.
+    !enLobby ? h('button', {
+      class: 'btn btn-ghost btn-sm',
+      onclick: () => {
+        if (isHost) { if (confirm('Ramener tout le monde au salon ?')) send({ t: 'backToLobby' }); }
+        else if (confirm('Quitter la partie ?')) leaveGame();
+      },
+    }, isHost ? '↩ Menu' : '✖ Quitter') : '',
   );
 }
 

@@ -42,6 +42,10 @@ const CSS = `
 .tb-card.down.cuttable{cursor:pointer;border-color:var(--red)}
 .tb-card.down.cuttable:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .tb-card.down.locked{opacity:.85}
+.tb-card.down.mine{background:var(--panel);border-style:dashed}
+.tb-card.down.mine.defuse{border-color:var(--green);color:var(--green)}
+.tb-card.down.mine.bomb{border-color:var(--red);color:var(--red)}
+.tb-card.down.mine.neutre{border-color:var(--faint);color:var(--muted)}
 .tb-card.rev{background:var(--faint)}
 .tb-card.rev.defuse{border-color:var(--green);background:rgba(80,200,120,.12)}
 .tb-card.rev.bomb{border-color:var(--red);background:rgba(220,60,60,.18)}
@@ -83,6 +87,7 @@ function playView(g, ctx) {
     h('p', {}, 'Coupez les fils. Désamorcez avant l’explosion.'),
   ));
   w.append(h('div', { class: 'tb-role' }, roleChip(ctx.secret ? ctx.secret.role : null, h)));
+  w.append(h('p', { class: 'hint-line' }, '👁️ Tu vois TES fils (en pointillés) — pas ceux des autres.'));
 
   // Compteurs.
   const fusePct = ctx.pct(g.defuseFound, g.defuseTotal);
@@ -131,6 +136,10 @@ function playView(g, ctx) {
           class: 'tb-card rev ' + c.type + (isNew ? ' flip' : ''),
           title: c.type === 'defuse' ? 'Fil désamorcé' : c.type === 'bomb' ? 'BOMBE' : 'Fil neutre',
         }, ICONS[c.type] || '⚪'));
+      } else if (p.id === myId && ctx.secret && ctx.secret.myCards && ctx.secret.myCards[idx]) {
+        // MES fils : je vois leur type (personne d'autre ne le voit).
+        const t = ctx.secret.myCards[idx].type;
+        hand.append(h('div', { class: 'tb-card down mine ' + t, title: 'Ton fil (visible par toi seul)' }, ICONS[t] || '⚪'));
       } else {
         const cuttable = myTurn && p.id !== myId;
         hand.append(h('div', {

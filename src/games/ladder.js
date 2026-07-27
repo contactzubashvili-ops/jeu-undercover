@@ -28,7 +28,11 @@ const THEMES = [
 
 export class LadderGame extends GameModule {
   start(config) {
-    this.totalRounds = clamp(parseInt((config || {}).rounds, 10) || 3, 1, 10);
+    config = config || {};
+    this.totalRounds = clamp(parseInt(config.rounds, 10) || 3, 1, 10);
+    // Échelles personnalisées de l'hôte (ex. « puissance dans Naruto »).
+    const custom = Array.isArray(config.ladderThemes) ? config.ladderThemes.map((s) => String(s).trim()).filter(Boolean).slice(0, 50) : [];
+    this.pool = custom.length ? (config.ladderOnlyCustom ? custom : custom.concat(THEMES)) : THEMES;
     this.round = 0;
     for (const p of this.players) { p.g = { number: null, answer: null }; p.score = 0; }
     this._nouvelleManche();
@@ -40,7 +44,8 @@ export class LadderGame extends GameModule {
     this.phase = 'answer';
     this.ordre = null;
     this.gagne = false;
-    this.theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+    const themePool = this.pool && this.pool.length ? this.pool : THEMES;
+    this.theme = themePool[Math.floor(Math.random() * themePool.length)];
 
     // Nombres secrets uniques 1..100 (échantillon sans remise) pour les connectés.
     const pool = melangerTableau(Array.from({ length: 100 }, (_, i) => i + 1));

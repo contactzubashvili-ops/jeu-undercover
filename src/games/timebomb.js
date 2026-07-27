@@ -142,8 +142,12 @@ export class TimeBombGame extends GameModule {
     };
   }
 
-  // Le rôle est PRIVÉ : il ne sort que vers le joueur concerné.
+  // PRIVÉ (au joueur concerné) : son rôle ET le contenu de SES cartes — jamais
+  // celles des autres.
   secretFor(player) {
-    return { role: player.g ? player.g.role : null };
+    return {
+      role: player.g ? player.g.role : null,
+      myCards: (player.g ? player.g.cards : []).map((c) => ({ type: c.type, revealed: !!c.revealed })),
+    };
   }
 }

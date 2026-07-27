@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { GameModule } from './base.js';
 import { normaliserMot, melangerTableau } from '../util.js';
+import { motValide } from '../dico-fr.js';
 
 export const META = { min: 2 };
 
@@ -28,6 +29,7 @@ export class BombPartyGame extends GameModule {
     for (const p of this.players) p.g = { vies: 2, alive: true };
 
     this.usedWords = new Set();
+    this.wordLog = [];        // mots acceptés (visibles par tous)
     this.lastWord = null;
     this.syllabe = null;
     this.phase = 'play';
@@ -89,11 +91,14 @@ export class BombPartyGame extends GameModule {
       const norme = normaliserMot(brut);
       if (norme.length < 3) return { error: 'Le mot doit faire au moins 3 lettres.' };
       if (!norme.includes(this.syllabe)) return { error: `Le mot doit contenir « ${this.syllabe} ».` };
+      if (!motValide(brut)) return { error: `« ${brut} » n'est pas dans le dictionnaire français.` };
       if (this.usedWords.has(norme)) return { error: 'Ce mot a déjà été joué.' };
 
       // Mot validé : on l'enregistre, on passe au suivant, nouvelle syllabe.
       // La bombe continue de tourner (on ne touche PAS au minuteur).
       this.usedWords.add(norme);
+      this.wordLog.push({ name: player.name, word: brut });
+      if (this.wordLog.length > 60) this.wordLog.shift();
       this.lastWord = brut;
       this.turnPos = this._vivantSuivantPos(this.turnPos);
       this.activeId = this.turnPos >= 0 ? this.order[this.turnPos] : null;
@@ -151,6 +156,7 @@ export class BombPartyGame extends GameModule {
       syllabe: this.syllabe,
       activeId: this.activeId,
       lastWord: this.lastWord,
+      words: this.wordLog || [],
       usedCount: this.usedWords ? this.usedWords.size : 0,
       // Le minuteur est CACHÉ (on n'expose pas endsAt) : suspense + anti-triche.
       timer: null,

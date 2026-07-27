@@ -111,11 +111,9 @@ async function main() {
     actif.send({ t: 'clue', text: 'indice' + i });
     await sleep(80);
   }
-  await waitFor(() => A.state.phase === 'discussion');
-  check('après les indices → discussion', A.state.phase === 'discussion');
-  check('4 indices enregistrés et diffusés', A.state.clues.length === 4);
+  check('indices enregistrés et diffusés (au moins un tour)', A.state.clues.length >= 4);
 
-  // Vote : tout le monde vote contre l'undercover (1er tour).
+  // Les indices bouclent à l'infini : l'hôte ouvre le vote.
   A.send({ t: 'openVote' });
   await waitFor(() => A.state.phase === 'vote');
   check('phase vote', A.state.phase === 'vote');
@@ -140,7 +138,8 @@ async function main() {
         const actifId = A.state.activeClueId;
         const actif = clients.find((c) => c.id === actifId);
         if (actif) actif.send({ t: 'clue', text: 'x' }); else A.send({ t: 'passClue' });
-        await waitFor(() => A.state.activeClueId !== actifId || A.state.phase !== 'clues', 3000);
+        A.send({ t: 'openVote' }); // les indices bouclent : on force le vote
+        await waitFor(() => A.state.phase !== 'clues', 3000);
       } else if (ph === 'discussion') {
         A.send({ t: 'openVote' });
         await waitFor(() => A.state.phase === 'vote', 3000);

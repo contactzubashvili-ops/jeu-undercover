@@ -33,10 +33,11 @@ function creerPartie(nbJoueurs, config = {}) {
   return { room, sockets, hostId };
 }
 
-// Donne les indices dans l'ordre pour arriver en discussion.
+// Donne les indices d'UN tour (les tours bouclent désormais à l'infini).
 function passerIndices(room) {
+  const cycle = room.cycle;
   let garde = 0;
-  while (room.phase === PHASES.CLUES && garde++ < 100) {
+  while (room.phase === PHASES.CLUES && room.cycle === cycle && garde++ < 50) {
     const actifId = room.publicState().activeClueId;
     room.soumettreIndice(actifId, 'indice');
   }
@@ -243,19 +244,19 @@ section('Vote à la majorité (« prêt à voter »)');
 {
   const { room, hostId } = creerPartie(5); // voteReady true par défaut
   room.demarrer(hostId); room.lancerIndices(hostId); passerIndices(room);
-  check('après les indices → discussion', room.phase === PHASES.DISCUSSION);
+  check('on reste en indices (boucle infinie)', room.phase === PHASES.CLUES);
   const vivants = room.vivants;
   room.marquerPretVote(vivants[0].id, true);
   room.marquerPretVote(vivants[1].id, true);
-  check('2/5 prêts : pas encore de vote', room.phase === PHASES.DISCUSSION);
+  check('2/5 prêts : pas encore de vote', room.phase === PHASES.CLUES);
   room.marquerPretVote(vivants[2].id, true);
-  check('3/5 prêts (>50 %) : le vote se lance', room.phase === PHASES.VOTE);
+  check('3/5 prêts (>50 %) : le vote se lance (même pendant les indices)', room.phase === PHASES.VOTE);
 }
 {
   const { room, hostId } = creerPartie(5, { voteReady: false });
   room.demarrer(hostId); room.lancerIndices(hostId); passerIndices(room);
   for (const p of room.vivants) room.marquerPretVote(p.id, true);
-  check('option désactivée : « prêt à voter » n’ouvre pas le vote', room.phase === PHASES.DISCUSSION);
+  check('option désactivée : « prêt à voter » n’ouvre pas le vote', room.phase === PHASES.CLUES);
 }
 
 // ── 8c) Sélection de mots par catégories multiples ─────────────────────────
@@ -286,7 +287,7 @@ section('Manches multiples : rotation et score conservé');
     let garde = 0;
     while (room.phase !== PHASES.ROUND_END && garde++ < 30) {
       if (room.phase === PHASES.REVEAL) room.lancerIndices(hostId);
-      else if (room.phase === PHASES.CLUES) passerIndices(room);
+      else if (room.phase === PHASES.CLUES) { passerIndices(room); room.ouvrirVote(hostId); }
       else if (room.phase === PHASES.DISCUSSION) room.ouvrirVote(hostId);
       else if (room.phase === PHASES.VOTE) {
         const civ = room.vivants.find((p) => p.role === ROLES.CIVIL) || room.vivants[0];

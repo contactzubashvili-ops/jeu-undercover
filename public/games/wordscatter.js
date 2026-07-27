@@ -28,9 +28,16 @@ const CSS = `
 .ws-len{ text-align:center; font-size:.74rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
 .ws-tiles{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
 .ws-tile{ width:46px; height:54px; display:flex; align-items:center; justify-content:center;
-  border-radius:10px; font-size:1.4rem; font-weight:900; cursor:pointer; color:var(--ink);
+  border-radius:10px; font-size:1.4rem; font-weight:900; cursor:grab; color:var(--ink); touch-action:none;
   background:var(--panel); border:1px solid var(--border);
   transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.ws-tile:active{ cursor:grabbing; }
+.ws-drop{ width:34px; height:54px; display:flex; align-items:center; justify-content:center; border-radius:10px;
+  font-size:1.2rem; color:var(--muted); border:2px dashed var(--border-strong); background:transparent; transition:all .12s; }
+.ws-drop.over{ border-color:var(--gold); color:var(--gold-2); background:color-mix(in srgb, var(--gold) 18%, transparent); transform:scale(1.12); }
+.ws-ghost{ position:fixed; z-index:90; transform:translate(-50%,-50%); pointer-events:none; width:46px; height:54px;
+  display:flex; align-items:center; justify-content:center; border-radius:10px; font-size:1.4rem; font-weight:900;
+  color:#17121e; background:var(--gold); box-shadow:0 8px 22px rgba(0,0,0,.55); }
 .ws-tile:hover{ transform:translateY(-3px); border-color:var(--gold); }
 .ws-tile.sel{ border-color:var(--gold-2); transform:translateY(-3px);
   background:color-mix(in srgb, var(--gold) 20%, var(--panel));
@@ -79,18 +86,42 @@ function boardView(g, ctx, animIndex) {
   const built = g.built || '';
   const len = g.wordLength || built.length;
   const board = h('div', { class: 'ws-board' });
-  for (let i = 0; i < len; i++) {
-    if (i < built.length) {
-      board.append(h('div', { class: 'ws-cell filled' + (i === animIndex ? ' pop' : '') }, built[i]));
-    } else {
-      board.append(h('div', { class: 'ws-cell empty' }, '·'));
-    }
-  }
+  // Zone de dépôt au début, lettres posées, zone de dépôt à la fin, puis vides.
+  board.append(h('div', { class: 'ws-drop', 'data-side': 'start', title: 'Déposer au début' }, '＋'));
+  for (let i = 0; i < built.length; i++) board.append(h('div', { class: 'ws-cell filled' + (i === animIndex ? ' pop' : '') }, built[i]));
+  board.append(h('div', { class: 'ws-drop', 'data-side': 'end', title: 'Déposer à la fin' }, '＋'));
+  for (let i = built.length; i < len; i++) board.append(h('div', { class: 'ws-cell empty' }, '·'));
   return h('div', { class: 'card stack' },
-    h('div', { class: 'ws-len' }, `${built.length} / ${len} lettres posées`),
+    h('div', { class: 'ws-len' }, `${built.length} / ${len} lettres · glisse une lettre sur un ＋`),
     board,
   );
 }
+
+// Glisser-déposer d'une lettre (souris + tactile). Tap simple = sélection.
+function startDrag(e, letter, idx, ctx) {
+  e.preventDefault();
+  const ghost = document.createElement('div');
+  ghost.className = 'ws-ghost'; ghost.textContent = letter;
+  document.body.appendChild(ghost);
+  const sx = e.clientX, sy = e.clientY;
+  const move = (g) => { moveGhost(ghost, g.clientX, g.clientY); highlightDrop(g.clientX, g.clientY); };
+  const up = (u) => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    ghost.remove(); clearDropHighlight();
+    const side = dropSideAt(u.clientX, u.clientY);
+    if (side) { ctx.gameSend('place', { letter, side }); selIdx = null; }
+    else if (Math.abs(u.clientX - sx) + Math.abs(u.clientY - sy) < 8) { selIdx = (selIdx === idx ? null : idx); } // tap
+    ctx.rerender();
+  };
+  moveGhost(ghost, sx, sy);
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+}
+function moveGhost(g, x, y) { g.style.left = x + 'px'; g.style.top = y + 'px'; }
+function dropSideAt(x, y) { const el = document.elementFromPoint(x, y); const z = el && el.closest ? el.closest('.ws-drop') : null; return z ? z.getAttribute('data-side') : null; }
+function highlightDrop(x, y) { clearDropHighlight(); const el = document.elementFromPoint(x, y); const z = el && el.closest ? el.closest('.ws-drop') : null; if (z) z.classList.add('over'); }
+function clearDropHighlight() { document.querySelectorAll('.ws-drop.over').forEach((z) => z.classList.remove('over')); }
 
 function playView(g, ctx, animIndex) {
   const { h, gameSend } = ctx;
@@ -102,7 +133,7 @@ function playView(g, ctx, animIndex) {
   w.append(h('div', { class: 'phase-banner' },
     h('span', { class: 'kicker' }, 'Word Scatter'),
     h('h2', {}, 'Reconstituez le mot, ensemble'),
-    h('p', {}, 'Posez vos lettres aux extrémités. La séquence doit rester un morceau du mot secret.'),
+    h('p', {}, 'Glisse tes lettres sur un ＋ (début ou fin). La séquence doit rester un morceau du mot.'),
   ));
 
   w.append(boardView(g, ctx, animIndex));
@@ -115,7 +146,7 @@ function playView(g, ctx, animIndex) {
     letters.forEach((L, i) => {
       tiles.append(h('div', {
         class: 'ws-tile' + (selIdx === i ? ' sel' : ''),
-        onclick: () => { selIdx = (selIdx === i ? null : i); ctx.rerender(); },
+        onpointerdown: (e) => startDrag(e, L, i, ctx),
       }, L));
     });
   }
@@ -132,7 +163,7 @@ function playView(g, ctx, animIndex) {
       h('button', { class: 'btn btn-violet', onclick: () => { gameSend('place', { letter: L, side: 'end' }); selIdx = null; } }, `Poser « ${L} » à la fin ▶`),
     ));
   } else if (letters.length) {
-    myLetters.append(h('p', { class: 'hint-line' }, 'Choisissez une lettre, puis posez-la au début ou à la fin.'));
+    myLetters.append(h('p', { class: 'hint-line' }, 'Glisse une lettre sur un ＋ — ou tape-la puis choisis début/fin.'));
   }
   w.append(myLetters);
 

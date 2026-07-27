@@ -37,6 +37,9 @@ const CONFIG_DEFAUT = {
   submitSeconds: 0,       // Fusion : temps pour répondre (0 = infini)
   // Pinturillo :
   roundSeconds: 75,       // temps par dessin (0 = infini)
+  // Échelle :
+  ladderThemes: [],       // échelles personnalisées
+  ladderOnlyCustom: false,// n'utiliser que les échelles perso
 };
 
 const VOTE_REVEAL_MS = 6500;   // temps d'affichage du résultat du vote
@@ -233,6 +236,9 @@ export class GameRoom {
     if (patch.teamMode != null) c.teamMode = !!patch.teamMode;
     if (patch.teams && typeof patch.teams === 'object') c.teams = patch.teams;
     if (Array.isArray(patch.fusionThemes)) c.fusionThemes = patch.fusionThemes.filter((x) => typeof x === 'string').slice(0, 60);
+    // Échelle : échelles personnalisées.
+    if (Array.isArray(patch.ladderThemes)) c.ladderThemes = patch.ladderThemes.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim().slice(0, 80)).slice(0, 50);
+    if (patch.ladderOnlyCustom != null) c.ladderOnlyCustom = !!patch.ladderOnlyCustom;
   }
 
   kick(hostId, targetId) {
@@ -434,7 +440,9 @@ export class GameRoom {
   _avancerIndice() {
     this.activeClueIdx += 1;
     if (this.activeClueIdx >= this.clueOrder.length) {
-      this._entrerDiscussion();
+      // Fin d'un tour : on RELANCE un tour d'indices (à l'infini). Le vote ne se
+      // déclenche qu'à la majorité des « prêts à voter » (ou par l'hôte).
+      this._demarrerCycleIndices();
     } else {
       this._armerTimerIndice();
     }
@@ -447,9 +455,10 @@ export class GameRoom {
     // Pas de minuteur : le vote se lance quand la majorité est prête (ou l'hôte).
   }
 
-  // Chaque joueur peut se déclarer « prêt à voter » ; à la majorité, le vote s'ouvre.
+  // Chaque joueur peut se déclarer « prêt à voter » À TOUT MOMENT (pendant les
+  // indices ou la discussion) ; à la majorité, le vote s'ouvre.
   marquerPretVote(playerId, value) {
-    if (this.phase !== PHASES.DISCUSSION) return;
+    if (this.phase !== PHASES.CLUES && this.phase !== PHASES.DISCUSSION) return;
     if (!this.config.voteReady) return;
     const p = this.trouver(playerId);
     if (!p || !p.alive) return;
@@ -464,10 +473,10 @@ export class GameRoom {
     this._broadcastRef && this._broadcastRef();
   }
 
-  // L'hôte peut ouvrir le vote directement.
+  // L'hôte peut ouvrir le vote directement (pendant les indices ou la discussion).
   ouvrirVote(hostId) {
     if (!this.estHote(hostId)) return;
-    if (this.phase !== PHASES.DISCUSSION) return;
+    if (this.phase !== PHASES.CLUES && this.phase !== PHASES.DISCUSSION) return;
     this._entrerVote();
   }
 
@@ -810,7 +819,7 @@ export class GameRoom {
       clueOrder: this.clueOrder.slice(),
       activeClueId: actif ? actif.id : null,
       clues: this.clues.map((c) => ({ playerId: c.playerId, name: c.name, text: c.text, cycle: c.cycle })),
-      discussion: this.phase === PHASES.DISCUSSION ? (() => {
+      discussion: (this.phase === PHASES.CLUES || this.phase === PHASES.DISCUSSION) ? (() => {
         const vivants = this.vivants.filter((p) => p.connected);
         return {
           enabled: this.config.voteReady,

@@ -41,6 +41,9 @@ const CSS = `
 .bp-bomb.bp-crit ~ .bp-syl{ color:var(--red); }
 .bp-syl-hint{ color:var(--muted); font-size:.85rem; }
 .bp-hidden{ color:var(--muted); font-size:.8rem; font-style:italic; }
+.bp-words{ display:flex; flex-wrap:wrap; gap:6px; max-height:140px; overflow-y:auto; }
+.bp-word{ background:var(--panel); border:1px solid var(--border); border-radius:999px; padding:4px 11px; font-size:.85rem; }
+.bp-word-by{ color:var(--faint); font-size:.78rem; }
 .bp-turn{ display:flex; align-items:center; gap:10px; justify-content:center; font-size:1.05rem; }
 .bp-turn .bp-av{ font-size:1.6rem; }
 .bp-players{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; }
@@ -124,8 +127,10 @@ function playView(g, ctx) {
     ));
   }
 
-  if (g.lastWord) {
-    w.append(h('p', { class: 'hint-line' }, `Dernier mot validé : « ${g.lastWord} »`));
+  if (g.words && g.words.length) {
+    const list = h('div', { class: 'bp-words' });
+    for (const e of g.words.slice(-24)) list.append(h('span', { class: 'bp-word' }, h('b', {}, e.word), h('span', { class: 'bp-word-by' }, ' · ' + e.name)));
+    w.append(h('div', { class: 'card stack' }, h('div', { class: 'kicker' }, `Mots joués (${g.usedCount || 0})`), list));
   }
 
   w.append(h('div', { class: 'card stack' },

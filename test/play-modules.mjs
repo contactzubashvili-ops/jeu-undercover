@@ -4,6 +4,7 @@
 //  Vérifie les conditions de victoire et les cas limites.
 // ─────────────────────────────────────────────────────────────────────────
 import { GameRoom } from '../src/room.js';
+import { unMotAvec } from '../src/dico-fr.js';
 
 let ok = 0, ko = 0;
 const check = (n, c) => { if (c) { ok++; } else { ko++; console.log('  ✗ ÉCHEC :', n); } };
@@ -30,15 +31,16 @@ section('Bomb Party : mots valides, explosions, dernier survivant gagne');
   const { room, ids, host } = creerRoom('bombparty', 3);
   const g = G(room);
   check('démarre en play avec une syllabe', g.phase === 'play' && typeof g.syllabe === 'string');
-  // Un mot valide (contenant la syllabe) est accepté et fait avancer le tour.
+  // Un VRAI mot français contenant la syllabe est accepté et fait avancer le tour.
   const actif1 = g.activeId;
-  const r = act(room, actif1, 'word', { text: 'zz' + g.syllabe + 'zz' });
-  check('mot contenant la syllabe accepté', r && r.ok);
+  const motVrai = unMotAvec(g.syllabe) || ('zz' + g.syllabe + 'zz');
+  const r = act(room, actif1, 'word', { text: motVrai });
+  check('vrai mot FR (dico + syllabe) accepté', r && r.ok);
   check('le tour a avancé', G(room).activeId !== actif1);
-  // Mot ne contenant pas la syllabe → refusé.
-  const badSyl = G(room).syllabe === 'zzz' ? 'aaa' : 'zzzqqq';
-  const r2 = act(room, G(room).activeId, 'word', { text: badSyl.includes(G(room).syllabe) ? 'qwxkjv' : badSyl });
-  check('mot sans la syllabe refusé', r2 && r2.error);
+  // Charabia contenant la syllabe → refusé par le dictionnaire.
+  const gib = 'zz' + G(room).syllabe + 'zz';
+  const r2 = act(room, G(room).activeId, 'word', { text: gib });
+  check('charabia (hors dictionnaire) refusé', r2 && r2.error);
   // On déclenche les explosions jusqu'à la fin.
   let garde = 0;
   while (G(room).phase === 'play' && garde++ < 40) room.avancerMinuteur();
@@ -88,6 +90,12 @@ section('Échelle : réponses, classement correct → victoire collective');
   const ordre = G(room).ordre;
   const estCroissant = ordre.every((e, k) => k === 0 || ordre[k - 1].number <= e.number);
   check('mauvais classement → perdu (sauf ordre déjà croissant)', estCroissant || G(room).gagne === false);
+}
+
+// Échelle : échelle personnalisée
+{
+  const { room } = creerRoom('ladder', 3, { rounds: 1, ladderThemes: ['Puissance dans Naruto'], ladderOnlyCustom: true });
+  check('Échelle : échelle perso utilisée comme thème', G(room).theme === 'Puissance dans Naruto');
 }
 
 // ── TIME BOMB ──────────────────────────────────────────────────────────────
