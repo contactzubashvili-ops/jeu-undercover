@@ -18,8 +18,8 @@ const SYLLABES = [
   'se', 'la', 'mi',
 ];
 
-const DUREE_MIN = 12; // secondes
-const DUREE_MAX = 22;
+const DUREE_MIN = 30; // secondes — CACHÉ au joueur (suspense)
+const DUREE_MAX = 45;
 
 export class BombPartyGame extends GameModule {
   start() {
@@ -152,7 +152,8 @@ export class BombPartyGame extends GameModule {
       activeId: this.activeId,
       lastWord: this.lastWord,
       usedCount: this.usedWords ? this.usedWords.size : 0,
-      timer: this.timerInfo(),
+      // Le minuteur est CACHÉ (on n'expose pas endsAt) : suspense + anti-triche.
+      timer: null,
       winnerId: this.winnerId,
       players,
     };

@@ -14,20 +14,19 @@ function injectCss(id, css) {
   document.head.appendChild(s);
 }
 
-// Fait « respirer » la bombe de plus en plus vite quand le temps presse.
-// Lit le minuteur global (#timerval) sans forcer de re-render complet.
+// Temps CACHÉ : le joueur ne voit pas de compte à rebours. On entretient la
+// tension par des tressaillements ALÉATOIRES de la bombe (elle peut sauter à
+// tout moment).
 function installTicker() {
   if (tickerOn) return;
   tickerOn = true;
   setInterval(() => {
     const bomb = document.getElementById('bp-bomb');
     if (!bomb) return;
-    const val = document.getElementById('timerval');
-    let s = 99;
-    if (val) s = Math.max(0, Math.ceil((Number(val.getAttribute('data-ends')) - Date.now()) / 1000));
-    bomb.classList.toggle('bp-warn', s <= 9);
-    bomb.classList.toggle('bp-crit', s <= 4);
-  }, 250);
+    const r = Math.random();
+    bomb.classList.toggle('bp-warn', r < 0.20);
+    bomb.classList.toggle('bp-crit', r < 0.06);
+  }, 300);
 }
 
 const CSS = `
@@ -41,6 +40,7 @@ const CSS = `
   color:var(--gold); text-shadow:0 2px 0 rgba(0,0,0,.35); }
 .bp-bomb.bp-crit ~ .bp-syl{ color:var(--red); }
 .bp-syl-hint{ color:var(--muted); font-size:.85rem; }
+.bp-hidden{ color:var(--muted); font-size:.8rem; font-style:italic; }
 .bp-turn{ display:flex; align-items:center; gap:10px; justify-content:center; font-size:1.05rem; }
 .bp-turn .bp-av{ font-size:1.6rem; }
 .bp-players{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; }
@@ -94,7 +94,7 @@ function playView(g, ctx) {
       h('div', { class: 'bp-bomb', id: 'bp-bomb' }, h('span', { class: 'bp-emoji' }, '💣')),
       h('div', { class: 'bp-syl' }, g.syllabe ? String(g.syllabe).toUpperCase() : '…'),
       h('div', { class: 'bp-syl-hint' }, 'syllabe imposée'),
-      ctx.timerEl(g.timer),
+      h('div', { class: 'bp-hidden' }, '🙈 temps caché — ça peut sauter à tout moment !'),
     ),
   ));
 
