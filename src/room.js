@@ -637,25 +637,32 @@ export class GameRoom {
   }
 
   // Conditions de victoire (hors victoire immédiate de Mister White par devinette).
-  // Générique pour les 3 modes : « imposteur » = Undercover et/ou Mister White.
   _evaluerFin() {
     const vivants = this.vivants;
-    const impostorsVivants = vivants.filter((p) => p.role === ROLES.UNDERCOVER || p.role === ROLES.MRWHITE);
-    const civilsVivants = vivants.filter((p) => p.role === ROLES.CIVIL);
+    const uc = vivants.filter((p) => p.role === ROLES.UNDERCOVER);
+    const mw = vivants.filter((p) => p.role === ROLES.MRWHITE);
+    const civils = vivants.filter((p) => p.role === ROLES.CIVIL);
+    const impostors = uc.length + mw.length;
 
-    // 1) Tous les imposteurs éliminés → Civils gagnent.
-    if (impostorsVivants.length === 0) return 'civils';
-    // 2) Un imposteur atteint la parité/majorité → le camp imposteur gagne.
-    if (impostorsVivants.length >= civilsVivants.length) {
-      return impostorsVivants.some((p) => p.role === ROLES.UNDERCOVER) ? 'undercover' : 'mrwhite';
+    // Plus aucun imposteur (ni undercover ni mister white) → Civils gagnent (tous modes).
+    if (impostors === 0) return 'civils';
+
+    if (this.config.mode === 'both') {
+      // MODE CLASSIQUE : la partie ne se conclut côté imposteur que si Mister
+      // White est ÉLIMINÉ ET que l'undercover est majoritaire sur les civils.
+      // Tant que Mister White est vivant, on CONTINUE (aucune victoire imposteur).
+      if (mw.length === 0 && uc.length > civils.length) return 'undercover';
+    } else {
+      // Modes purs : l'unique imposteur gagne à la parité/majorité.
+      if (impostors >= civils.length) return uc.length ? 'undercover' : 'mrwhite';
     }
-    // Sécurité anti-blocage : plus assez de joueurs pour continuer.
+
+    // Sécurité anti-blocage (plus assez de joueurs pour continuer).
     if (vivants.length <= 1) {
-      if (impostorsVivants.some((p) => p.role === ROLES.UNDERCOVER)) return 'undercover';
-      if (impostorsVivants.length) return 'mrwhite';
+      if (uc.length) return 'undercover';
+      if (mw.length) return 'mrwhite';
       return 'civils';
     }
-    // Sinon on continue (nouveau cycle d'indices).
     return null;
   }
 

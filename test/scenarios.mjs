@@ -208,16 +208,35 @@ section('Victoire des Civils (UC et MW éliminés)');
   check('Civils gagnent', room.phase === PHASES.ROUND_END && room.winner === 'civils');
 }
 
-// ── 7) Victoire de l’Undercover : parité ───────────────────────────────────
-section('Victoire de l’Undercover (parité)');
+// ── 7) Conditions de fin en mode CLASSIQUE (undercover + mister white) ──────
+//  Règle : tant que Mister White est vivant, la partie NE se conclut pas côté
+//  imposteur ; l'undercover ne gagne que si MW est éliminé ET qu'il domine les
+//  civils ; sinon on continue jusqu'à ce que les DEUX imposteurs soient éliminés
+//  (victoire des civils). Test direct de la logique (déterministe).
+section('Fin de partie — mode classique');
 {
-  // 3 joueurs : 1 civil, 1 UC, 1 MW. On élimine le civil → UC + MW = parité, UC vivant.
-  const { room, hostId } = creerPartie(3);
+  const { room, hostId } = creerPartie(5); // mode « both » par défaut : 3 civils, 1 UC, 1 MW
   room.demarrer(hostId);
-  room.lancerIndices(hostId); passerIndices(room); room.ouvrirVote(hostId);
-  const civ = parRole(room, ROLES.CIVIL)[0];
-  voterContre(room, civ.id); room.avancerMinuteur();
-  check('Undercover gagne à la parité', room.phase === PHASES.ROUND_END && room.winner === 'undercover');
+  const uc = parRole(room, ROLES.UNDERCOVER)[0];
+  const mw = parRole(room, ROLES.MRWHITE)[0];
+  const civs = parRole(room, ROLES.CIVIL);
+  const reset = () => { for (const p of room.players) p.alive = true; };
+
+  // Mister White vivant + undercover majoritaire → la partie CONTINUE.
+  reset(); for (const c of civs) c.alive = false; // vivants : UC + MW (0 civil)
+  check('MW vivant (UC majoritaire) → pas de victoire undercover, on continue', room._evaluerFin() !== 'undercover');
+
+  // Mister White éliminé + plus aucun civil → Undercover gagne.
+  reset(); mw.alive = false; for (const c of civs) c.alive = false; // vivants : UC seul
+  check('MW éliminé + undercover domine les civils → Undercover gagne', room._evaluerFin() === 'undercover');
+
+  // Undercover ET Mister White éliminés → Civils gagnent.
+  reset(); uc.alive = false; mw.alive = false; // vivants : 3 civils
+  check('UC + MW éliminés → Civils gagnent', room._evaluerFin() === 'civils');
+
+  // MW éliminé mais civils encore majoritaires → la partie continue.
+  reset(); mw.alive = false; civs[0].alive = false; // vivants : UC + 2 civils
+  check('MW éliminé mais civils majoritaires → on continue', room._evaluerFin() == null);
 }
 
 // ── 8) Égalité au vote → second tour ───────────────────────────────────────
@@ -283,15 +302,15 @@ section('Manches multiples : rotation et score conservé');
     if (m === 0) room.demarrer(hostId); else room.mancheSuivante(hostId);
     historique.push(parRole(room, ROLES.UNDERCOVER)[0].id);
     motsUtilises.add(room.secret.key);
-    // terminer vite la manche : parité undercover en éliminant les civils
+    // terminer la manche : on élimine les DEUX imposteurs (UC puis MW) → civils gagnent
     let garde = 0;
     while (room.phase !== PHASES.ROUND_END && garde++ < 30) {
       if (room.phase === PHASES.REVEAL) room.lancerIndices(hostId);
       else if (room.phase === PHASES.CLUES) { passerIndices(room); room.ouvrirVote(hostId); }
       else if (room.phase === PHASES.DISCUSSION) room.ouvrirVote(hostId);
       else if (room.phase === PHASES.VOTE) {
-        const civ = room.vivants.find((p) => p.role === ROLES.CIVIL) || room.vivants[0];
-        voterContre(room, civ.id);
+        const imp = room.vivants.find((p) => p.role !== ROLES.CIVIL) || room.vivants[0];
+        voterContre(room, imp.id);
       } else if (room.phase === PHASES.VOTE_REVEAL) room.avancerMinuteur();
       else if (room.phase === PHASES.MRWHITE_GUESS) room.deviner(room.mrWhite.playerId, 'faux');
     }
