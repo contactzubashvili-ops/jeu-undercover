@@ -8,11 +8,16 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { GameModule } from './base.js';
 import { melangerTableau } from '../util.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 export const META = { min: 3, max: 10 };
 
-// ~60 mots français courants, EN MAJUSCULES, SANS accents, longueur 6 à 12.
-const WORDS = [
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Repli intégré (~60 mots) — remplacé par la grande liste si elle est présente.
+let WORDS = [
   'MONTAGNE', 'ORDINATEUR', 'BIBLIOTHEQUE', 'CHOCOLAT', 'AVENTURE', 'PARAPLUIE',
   'TELEPHONE', 'DINOSAURE', 'CHAMPIGNON', 'ELEPHANT', 'GUITARE', 'FROMAGE',
   'VOLCAN', 'TORNADE', 'CROISSANT', 'JONGLEUR', 'LABYRINTHE', 'PENDULE',
@@ -25,6 +30,13 @@ const WORDS = [
   'DRAGON', 'SORCIER', 'FANTOME', 'VAMPIRE', 'CITROUILLE', 'MANDARINE',
   'FRAMBOISE', 'CONCOMBRE',
 ];
+
+// Grande liste externe (générée) : ~1000+ mots. Repli sur la liste ci-dessus.
+try {
+  const arr = JSON.parse(readFileSync(join(__dirname, '..', 'data', 'wordscatter-words.json'), 'utf8'));
+  const clean = [...new Set(arr.filter((w) => typeof w === 'string' && /^[A-Z]{6,12}$/.test(w)))];
+  if (clean.length > 50) WORDS = clean;
+} catch { /* repli sur la liste intégrée */ }
 
 export class WordScatterGame extends GameModule {
   start() {

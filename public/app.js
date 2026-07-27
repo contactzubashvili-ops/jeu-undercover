@@ -351,8 +351,21 @@ function selectedGamePanel(st, isHost) {
   else if (g.id === 'fusion') body.append(fusionConfig(st, isHost));
   else if (g.id === 'pinturillo') body.append(pinturilloConfig(st, isHost));
   else if (g.id === 'ladder') body.append(ladderConfig(st, isHost));
+  else if (g.id === 'timebomb') body.append(timebombConfig(st, isHost));
   else if (!g.available) body.append(h('p', { class: 'hint-line' }, '⏳ Ce jeu arrive très bientôt sur la plateforme.'));
   return body;
+}
+
+function timebombConfig(st, isHost) {
+  const c = st.config;
+  const conn = st.players.filter((p) => p.connected).length;
+  const auto = Math.floor(conn / 2);
+  const cur = c.timebombTraitors || 0;
+  if (!isHost) return h('div', { class: 'muted small' }, `Traîtres : ${cur === 0 ? `auto (${auto})` : cur}`);
+  return h('div', { class: 'stack' },
+    field('Nombre de traîtres (0 = auto)', cfgNum('timebombTraitors', cur, 0, Math.max(1, conn - 1))),
+    h('p', { class: 'hint-line' }, `Auto = ${auto} pour ${conn} joueur(s). On ne peut pas recouper celui qui vient de couper.`),
+  );
 }
 
 function ladderConfig(st, isHost) {
@@ -398,6 +411,7 @@ function fusionConfig(st, isHost) {
       `${c.rounds} manche(s) · ${c.teamMode ? 'en équipes' : 'chacun pour soi'} · thèmes : ${selThemes.size || 'tous'}`);
   }
   return h('div', { class: 'stack' },
+    field('Type de duos', segmented('fusionMode', [['classic', 'Mots proches'], ['random', 'Aléatoire'], ['both', 'Les deux']], c.fusionMode || 'classic')),
     h('div', { class: 'grid-2' },
       field('Manches', cfgNum('rounds', c.rounds, 1, 20)),
       field('Temps/manche (s, 0 = ∞)', cfgNum('submitSeconds', c.submitSeconds || 0, 0, 300)),
@@ -640,11 +654,10 @@ function viewClues() {
     w.append(h('p', { class: 'hint-line' }, '👻 Vous êtes éliminé — vous observez la partie.'));
   }
 
-  // Indices donnés dans ce cycle
-  const cycleClues = st.clues.filter((c) => c.cycle === st.cycle);
-  if (cycleClues.length) {
+  // Tous les indices (historique permanent, à travers les tours qui bouclent).
+  if (st.clues.length) {
     const list = h('div', { class: 'clue-list' });
-    for (const c of cycleClues) {
+    for (const c of st.clues) {
       const p = st.players.find((x) => x.id === c.playerId);
       list.append(h('div', { class: 'clue-item' },
         h('div', { class: 'av' }, p ? p.avatar : '❓'),
@@ -652,7 +665,7 @@ function viewClues() {
         h('div', { class: 'ct' }, c.text),
       ));
     }
-    w.append(h('div', { class: 'card stack' }, h('div', { class: 'kicker' }, 'Indices de ce tour'), list));
+    w.append(h('div', { class: 'card stack' }, h('div', { class: 'kicker' }, `Indices (${st.clues.length})`), list));
   }
 
   // Prêt à voter — disponible À TOUT MOMENT pendant les indices.

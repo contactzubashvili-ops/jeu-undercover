@@ -109,13 +109,13 @@ section('Time Bomb : victoire des Gentils (tous les désamorçages) et des Traî
   check('rôle ABSENT de l’état public en jeu', G(room).publicState().players.every((p) => p.role == null));
   let garde = 0;
   while (G(room).phase === 'play' && garde++ < 60) {
-    const cutter = G(room).cutterId;
-    // cherche un désamorçage non révélé chez un autre
+    const cutter = G(room).cutterId, lc = G(room).lastCutterId;
+    // cherche un désamorçage non révélé chez un autre (pas soi, pas le dernier coupeur)
     let done = false;
-    for (const id of ids) { if (id === cutter) continue; const p = room.trouver(id); const idx = p.g.cards.findIndex((c) => !c.revealed && c.type === 'defuse'); if (idx >= 0) { act(room, cutter, 'cut', { targetId: id, index: idx }); done = true; break; } }
+    for (const id of ids) { if (id === cutter || id === lc) continue; const p = room.trouver(id); const idx = p.g.cards.findIndex((c) => !c.revealed && c.type === 'defuse'); if (idx >= 0) { act(room, cutter, 'cut', { targetId: id, index: idx }); done = true; break; } }
     if (done) continue;
     // sinon coupe une carte non-bombe non révélée pour avancer
-    for (const id of ids) { if (id === cutter) continue; const p = room.trouver(id); const idx = p.g.cards.findIndex((c) => !c.revealed && c.type !== 'bomb'); if (idx >= 0) { act(room, cutter, 'cut', { targetId: id, index: idx }); done = true; break; } }
+    for (const id of ids) { if (id === cutter || id === lc) continue; const p = room.trouver(id); const idx = p.g.cards.findIndex((c) => !c.revealed && c.type !== 'bomb'); if (idx >= 0) { act(room, cutter, 'cut', { targetId: id, index: idx }); done = true; break; } }
     if (!done) break;
   }
   check('la partie se termine', G(room).phase === 'over');
@@ -125,20 +125,30 @@ section('Time Bomb : victoire des Gentils (tous les désamorçages) et des Traî
   check('le camp gagnant marque', gagnants.every((id) => room.trouver(id).score === 1));
 }
 {
-  // Traîtres : on coupe la bombe → fin immédiate côté traîtres.
-  const { room, ids, host } = creerRoom('timebomb', 4);
-  const cutter = G(room).cutterId;
-  let cible = null, cidx = -1;
-  for (const id of ids) { if (id === cutter) continue; const p = room.trouver(id); const idx = p.g.cards.findIndex((c) => c.type === 'bomb'); if (idx >= 0) { cible = id; cidx = idx; break; } }
-  if (cible == null) { // la bombe est chez le coupeur : on coupe une carte, le tour change, puis on la trouve
-    for (const id of ids) { if (id === cutter) continue; act(room, cutter, 'cut', { targetId: id, index: 0 }); break; }
-    const c2 = G(room).cutterId;
-    for (const id of ids) { if (id === c2) continue; const p = room.trouver(id); const idx = p.g.cards.findIndex((c) => !c.revealed && c.type === 'bomb'); if (idx >= 0) { cible = id; cidx = idx; act(room, c2, 'cut', { targetId: id, index: idx }); break; } }
-  } else {
-    act(room, cutter, 'cut', { targetId: cible, index: cidx });
+  // Traîtres : on cherche à couper la BOMBE (en coupant des cartes neutres pour
+  // faire tourner, sans révéler de désamorçages, jusqu'à ce que la bombe soit
+  // accessible — hors soi et hors dernier coupeur).
+  const { room, ids } = creerRoom('timebomb', 4);
+  let garde = 0, boom = false;
+  while (G(room).phase === 'play' && garde++ < 40) {
+    const cutter = G(room).cutterId, lc = G(room).lastCutterId;
+    let cut = false;
+    for (const id of ids) { if (id === cutter || id === lc) continue; const p = room.trouver(id); const bi = p.g.cards.findIndex((c) => !c.revealed && c.type === 'bomb'); if (bi >= 0) { act(room, cutter, 'cut', { targetId: id, index: bi }); boom = true; cut = true; break; } }
+    if (cut) break;
+    for (const id of ids) { if (id === cutter || id === lc) continue; const p = room.trouver(id); const ni = p.g.cards.findIndex((c) => !c.revealed && c.type === 'neutre'); if (ni >= 0) { act(room, cutter, 'cut', { targetId: id, index: ni }); cut = true; break; } }
+    if (!cut) break;
   }
-  const won = G(room).phase === 'over' && G(room).winnerTeam === 'traitres' && G(room).bombFound;
-  check('bombe coupée → victoire des Traîtres', won || G(room).phase === 'over');
+  check('la bombe finit par sauter (Traîtres) ou partie terminée', (boom && G(room).winnerTeam === 'traitres') || G(room).phase === 'over');
+}
+// Time Bomb : on ne peut pas couper celui qui vient de couper + nb de traîtres choisi.
+{
+  const { room, ids } = creerRoom('timebomb', 5, { timebombTraitors: 3 });
+  check('nombre de traîtres respecté (3)', ids.filter((id) => room.trouver(id).g.role === 'traitres').length === 3);
+  const cutter = G(room).cutterId;
+  const target = ids.find((id) => id !== cutter);
+  act(room, cutter, 'cut', { targetId: target, index: 0 }); // cutter coupe target → cutter devient « dernier coupeur »
+  const r = act(room, G(room).cutterId, 'cut', { targetId: cutter, index: 0 }); // interdit : recouper le dernier coupeur
+  check('interdit de recouper celui qui vient de couper', r && r.error);
 }
 
 // ── WORD SCATTER ───────────────────────────────────────────────────────────

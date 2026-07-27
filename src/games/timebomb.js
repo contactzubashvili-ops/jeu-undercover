@@ -19,14 +19,17 @@ export const META = { min: 4 };
 function cartesParJoueur(round) { return 6 - round; }
 
 export class TimeBombGame extends GameModule {
-  start() {
+  start(config) {
+    this.startConfig = config || {};
     const players = this.players;
     const N = players.length;
     this.N = N;
     this.defuseTotal = N;
 
-    // Rôles secrets : floor(N/2) traîtres, le reste gentils.
-    const nbTraitres = Math.floor(N / 2);
+    // Nombre de traîtres : choisi par l'hôte (défaut floor(N/2)), borné 1..N-1.
+    let nbTraitres = parseInt(this.startConfig.timebombTraitors, 10);
+    if (!Number.isFinite(nbTraitres) || nbTraitres < 1) nbTraitres = Math.floor(N / 2); // 0/absent = auto
+    nbTraitres = clamp(nbTraitres, 1, N - 1);
     const ordre = melangerTableau(players);
     ordre.forEach((p, i) => {
       p.g = { role: i < nbTraitres ? 'traitres' : 'gentils', cards: [] };
@@ -44,6 +47,7 @@ export class TimeBombGame extends GameModule {
     this._distribuer(deck, cartesParJoueur(1));
 
     this.cutterId = melangerTableau(players)[0].id; // coupeur de départ au hasard
+    this.lastCutterId = null;   // on ne peut pas couper celui qui vient de couper
     this.cutsThisRound = 0;
     this.defuseFound = 0;
     this.bombFound = false;
@@ -67,6 +71,7 @@ export class TimeBombGame extends GameModule {
       const target = this.trouver(msg && msg.targetId);
       if (!target || !target.g) return { error: 'Joueur introuvable.' };
       if (target.id === player.id) return { error: 'On ne coupe pas ses propres fils.' };
+      if (target.id === this.lastCutterId) return { error: 'On ne peut pas couper celui qui vient de couper.' };
       const index = parseInt(msg && msg.index, 10);
       const card = target.g.cards[index];
       if (!card || card.revealed) return { error: 'Carte indisponible.' };
@@ -84,7 +89,9 @@ export class TimeBombGame extends GameModule {
         return { ok: true };
       }
 
-      // Pas fini : le joueur coupé devient le coupeur.
+      // Pas fini : le joueur coupé devient le coupeur ; l'ancien devient « celui
+      // qui vient de couper » (interdit de le recouper au tour suivant).
+      this.lastCutterId = player.id;
       this.cutterId = target.id;
       this.cutsThisRound++;
 
@@ -97,7 +104,7 @@ export class TimeBombGame extends GameModule {
 
     if (action === 'restart') {
       if (!this.estHote(player.id) || this.phase !== 'over') return;
-      this.start();
+      this.start(this.startConfig);
       return { ok: true };
     }
   }
@@ -151,3 +158,5 @@ export class TimeBombGame extends GameModule {
     };
   }
 }
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }

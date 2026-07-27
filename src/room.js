@@ -34,12 +34,15 @@ const CONFIG_DEFAUT = {
   teamMode: false,        // jouer en équipes
   teams: {},              // playerId -> 'A' | 'B'
   fusionThemes: [],       // thèmes de Fusion (vide = tous)
+  fusionMode: 'classic',  // classic (mots proches) | random (sans lien) | both
   submitSeconds: 0,       // Fusion : temps pour répondre (0 = infini)
   // Pinturillo :
   roundSeconds: 75,       // temps par dessin (0 = infini)
   // Échelle :
   ladderThemes: [],       // échelles personnalisées
   ladderOnlyCustom: false,// n'utiliser que les échelles perso
+  // Time Bomb :
+  timebombTraitors: 0,    // nombre de traîtres (0 = auto = floor(N/2))
 };
 
 const VOTE_REVEAL_MS = 6500;   // temps d'affichage du résultat du vote
@@ -236,9 +239,12 @@ export class GameRoom {
     if (patch.teamMode != null) c.teamMode = !!patch.teamMode;
     if (patch.teams && typeof patch.teams === 'object') c.teams = patch.teams;
     if (Array.isArray(patch.fusionThemes)) c.fusionThemes = patch.fusionThemes.filter((x) => typeof x === 'string').slice(0, 60);
+    if (patch.fusionMode && ['classic', 'random', 'both'].includes(patch.fusionMode)) c.fusionMode = patch.fusionMode;
     // Échelle : échelles personnalisées.
     if (Array.isArray(patch.ladderThemes)) c.ladderThemes = patch.ladderThemes.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim().slice(0, 80)).slice(0, 50);
     if (patch.ladderOnlyCustom != null) c.ladderOnlyCustom = !!patch.ladderOnlyCustom;
+    // Time Bomb : nombre de traîtres.
+    if (patch.timebombTraitors != null) c.timebombTraitors = clamp(parseInt(patch.timebombTraitors, 10) || 0, 0, 7);
   }
 
   kick(hostId, targetId) {
@@ -340,6 +346,7 @@ export class GameRoom {
     this.mrWhite = null;
     this.clues = [];
     this.votes.clear();
+    this.voteReadyIds = new Set();
     this.voteCandidates = null;
 
     // Seuls les joueurs connectés participent à la manche.
@@ -483,6 +490,7 @@ export class GameRoom {
   _entrerVote() {
     this._clearTimer();
     this.votes.clear();
+    this.voteReadyIds = new Set(); // on remet les « prêts à voter » à zéro à chaque vote
     for (const p of this.players) p.hasVoted = false;
     this.phase = PHASES.VOTE;
     const secs = this.config.voteSeconds;
@@ -692,7 +700,9 @@ export class GameRoom {
       roles: participants.map((p) => ({ id: p.id, name: p.name, role: p.role, alive: p.alive, points: p.score })),
     };
 
-    if (this.round >= this.config.rounds) this.seriesOver = true;
+    // Un jeu Undercover = une partie jouée jusqu'à la victoire (plus d'undercover
+    // ni de mister white, ou victoire des imposteurs). L'hôte peut relancer.
+    this.seriesOver = true;
     this._broadcastRef && this._broadcastRef();
   }
 

@@ -7,10 +7,16 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { GameModule } from './base.js';
 import { normaliserMot, melangerTableau } from '../util.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 export const META = { min: 2 };
 
-const MOTS = [
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Repli intégré (~130 mots) — remplacé par la grande liste si présente.
+let MOTS = [
   'chat', 'chien', 'maison', 'soleil', 'arbre', 'voiture', 'fleur', 'poisson', 'oiseau', 'étoile',
   'cœur', 'lune', 'montagne', 'bateau', 'avion', 'pomme', 'banane', 'pizza', 'gâteau', 'ballon',
   'livre', 'lampe', 'clé', 'horloge', 'parapluie', 'lunettes', 'chapeau', 'chaussure', 'guitare', 'piano',
@@ -25,6 +31,13 @@ const MOTS = [
   'sorcière', 'couronne', 'épée', 'bouclier', 'potion', 'trésor', 'diamant', 'clown', 'ninja', 'astronaute',
   'sirène', 'ange', 'fromage', 'croissant', 'ballon de foot', 'montgolfière', 'phare', 'moulin', 'igloo', 'cerf-volant',
 ];
+
+// Grande liste externe (générée) : ~1000+ mots à dessiner. Repli ci-dessus.
+try {
+  const arr = JSON.parse(readFileSync(join(__dirname, '..', 'data', 'pinturillo-words.json'), 'utf8'));
+  const clean = [...new Set(arr.filter((w) => typeof w === 'string' && w.trim().length >= 2 && w.trim().length <= 28).map((w) => w.trim().toLowerCase()))];
+  if (clean.length > 50) MOTS = clean;
+} catch { /* repli sur la liste intégrée */ }
 
 const REVEAL_SECONDS = 6;
 const MAX_POINTS = 4000; // plafond de points de tracé mémorisés par manche

@@ -7,16 +7,26 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { GameModule } from './base.js';
 import { normaliserMot, melangerTableau } from '../util.js';
-import { motValide } from '../dico-fr.js';
+import { motValide, unMotAvec } from '../dico-fr.js';
 
 export const META = { min: 2 };
 
-// Bigrammes / trigrammes fréquents en français (déjà sous forme normalisée).
+// Bi/tri/quadrigrammes fréquents en français (forme normalisée, sans accent).
 const SYLLABES = [
-  'ma', 're', 'ta', 'co', 'pi', 'ch', 'on', 'in', 'an', 'ou', 'tion', 'eur',
-  'age', 'par', 'tri', 'vi', 'po', 'ra', 'li', 'ca', 'de', 'bo', 'fa', 'bre',
-  'cla', 'pre', 'ment', 'ette', 'ar', 'or', 'en', 'is', 'ri', 'na', 'to',
-  'se', 'la', 'mi',
+  // 2 lettres
+  'ma', 're', 'ta', 'co', 'pi', 'ch', 'on', 'in', 'an', 'ou', 'ar', 'or', 'en',
+  'is', 'ri', 'na', 'to', 'se', 'la', 'mi', 'ra', 'li', 'ca', 'de', 'bo', 'fa',
+  'vi', 'po', 'lo', 'mo', 'do', 'no', 'so', 'ro', 'te', 'le', 'me', 'ne', 'pe',
+  // 3 lettres
+  'con', 'par', 'tra', 'pre', 'pro', 'per', 'des', 'dis', 'com', 'ent', 'ant',
+  'int', 'sur', 'ter', 'ver', 'tou', 'pou', 'sou', 'bou', 'cou', 'mou', 'bal',
+  'mal', 'cal', 'val', 'fil', 'col', 'vol', 'sol', 'mor', 'tor', 'por', 'cor',
+  'gar', 'car', 'bar', 'mar', 'tar', 'san', 'ban', 'can', 'man', 'ran', 'van',
+  'che', 'gne', 'tre', 'bre', 'cre', 'dre', 'gre', 'vre', 'ble', 'cle', 'gle',
+  'pla', 'gra', 'fra', 'cra', 'bra', 'ail', 'oir', 'air', 'eur', 'eau',
+  // 4 lettres
+  'tion', 'ment', 'ette', 'elle', 'euse', 'able', 'ique', 'aire', 'ance', 'ence',
+  'onne', 'iste', 'isme', 'ille', 'appe', 'oule', 'ense',
 ];
 
 const DUREE_MIN = 30; // secondes — CACHÉ au joueur (suspense)
@@ -51,6 +61,11 @@ export class BombPartyGame extends GameModule {
   }
 
   _nouvelleSyllabe() {
+    // On garantit qu'au moins un vrai mot français contient la syllabe.
+    for (let i = 0; i < 15; i++) {
+      const s = SYLLABES[Math.floor(Math.random() * SYLLABES.length)];
+      if (unMotAvec(s)) { this.syllabe = s; return; }
+    }
     this.syllabe = SYLLABES[Math.floor(Math.random() * SYLLABES.length)];
   }
 

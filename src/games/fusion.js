@@ -88,6 +88,33 @@ export const THEMES = [
 
 const THEMES_BY_KEY = Object.fromEntries(THEMES.map((t) => [t.key, t]));
 
+// Pool de mots connus pour le mode « aléatoire » (2 mots sans lien à relier).
+const COMMON_WORDS = [
+  'Feu', 'Eau', 'Terre', 'Air', 'Chat', 'Chien', 'Maison', 'Voiture', 'Arbre', 'Fleur',
+  'Soleil', 'Lune', 'Étoile', 'Montagne', 'Mer', 'Plage', 'Forêt', 'Rivière', 'Pont', 'Route',
+  'Ville', 'Château', 'Roi', 'Reine', 'Épée', 'Bouclier', 'Dragon', 'Licorne', 'Sorcière', 'Fantôme',
+  'Robot', 'Fusée', 'Avion', 'Bateau', 'Train', 'Vélo', 'Moto', 'Ballon', 'Livre', 'Stylo',
+  'Table', 'Chaise', 'Lampe', 'Horloge', 'Clé', 'Porte', 'Fenêtre', 'Miroir', 'Bougie', 'Gâteau',
+  'Pizza', 'Pomme', 'Banane', 'Fromage', 'Café', 'Chocolat', 'Glace', 'Miel', 'Guitare', 'Piano',
+  'Tambour', 'Micro', 'Casque', 'Téléphone', 'Ordinateur', 'Écran', 'Caméra', 'Requin', 'Baleine', 'Lion',
+  'Tigre', 'Loup', 'Renard', 'Ours', 'Lapin', 'Serpent', 'Aigle', 'Hibou', 'Abeille', 'Papillon',
+  'Araignée', 'Poisson', 'Dauphin', 'Pingouin', 'Éléphant', 'Girafe', 'Singe', 'Panda', 'Pirate', 'Ninja',
+  'Clown', 'Astronaute', 'Cowboy', 'Chevalier', 'Ange', 'Diable', 'Vampire', 'Zombie', 'Trésor', 'Diamant',
+  'Couronne', 'Masque', 'Parapluie', 'Chapeau', 'Lunettes', 'Montre', 'Valise', 'Cadeau', 'Tente', 'Éclair',
+  'Arc-en-ciel', 'Volcan', 'Désert', 'Île', 'Nuage', 'Neige', 'Pluie', 'Vent', 'Pomme de terre', 'Sirène',
+];
+
+function pairesAleatoires(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = COMMON_WORDS[Math.floor(Math.random() * COMMON_WORDS.length)];
+    let b = COMMON_WORDS[Math.floor(Math.random() * COMMON_WORDS.length)];
+    let g = 0; while (b === a && g++ < 5) b = COMMON_WORDS[Math.floor(Math.random() * COMMON_WORDS.length)];
+    out.push([a, b]);
+  }
+  return out;
+}
+
 export class FusionGame extends GameModule {
   start(config) {
     this.totalRounds = clamp(parseInt(config.rounds, 10) || 5, 1, 20);
@@ -95,11 +122,17 @@ export class FusionGame extends GameModule {
     this.teamMode = !!config.teamMode;
     this.teams = config.teams || {};          // playerId -> 'A' | 'B'
     this.round = 0;
-    // Thèmes choisis (clés) ; vide = tous.
+    this.mode = ['classic', 'random', 'both'].includes(config.fusionMode) ? config.fusionMode : 'classic';
+    // Duos « classiques » (mots proches), filtrés par thèmes choisis.
     const sel = Array.isArray(config.fusionThemes) ? config.fusionThemes.filter((k) => THEMES_BY_KEY[k]) : [];
     const themes = sel.length ? sel.map((k) => THEMES_BY_KEY[k]) : THEMES;
-    const pool = themes.flatMap((t) => t.pairs);
-    this.prompts = melangerTableau(pool.length ? pool : THEMES[0].pairs);
+    const classic = themes.flatMap((t) => t.pairs);
+    let pool;
+    if (this.mode === 'random') pool = pairesAleatoires(150);
+    else if (this.mode === 'both') pool = classic.concat(pairesAleatoires(Math.max(60, classic.length)));
+    else pool = classic;
+    if (!pool.length) pool = classic.length ? classic : pairesAleatoires(60);
+    this.prompts = melangerTableau(pool);
     for (const p of this.players) p.g = { answer: null, submitted: false, total: 0, roundPts: 0 };
     this._nouvelleManche();
   }

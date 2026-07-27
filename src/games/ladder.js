@@ -45,7 +45,10 @@ export class LadderGame extends GameModule {
     this.ordre = null;
     this.gagne = false;
     const themePool = this.pool && this.pool.length ? this.pool : THEMES;
-    this.theme = themePool[Math.floor(Math.random() * themePool.length)];
+    let t = themePool[Math.floor(Math.random() * themePool.length)];
+    if (themePool.length > 1) { let garde = 0; while (t === this.lastTheme && garde++ < 12) t = themePool[Math.floor(Math.random() * themePool.length)]; }
+    this.theme = t;
+    this.lastTheme = t;
 
     // Nombres secrets uniques 1..100 (échantillon sans remise) pour les connectés.
     const pool = melangerTableau(Array.from({ length: 100 }, (_, i) => i + 1));
