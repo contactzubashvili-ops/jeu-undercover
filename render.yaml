@@ -1,0 +1,13 @@
+# Déploiement « 1 clic » sur Render (https://render.com).
+# Sur Render : New + → Blueprint → choisis ton dépôt GitHub → il lit ce fichier.
+services:
+  - type: web
+    name: undercover-jeux
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

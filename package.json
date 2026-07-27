@@ -1,0 +1,19 @@
+{
+  "name": "undercover-jeu",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Undercover — jeu web multijoueur en temps réel (Node + WebSocket). Serveur autoritaire, rôles secrets protégés.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node test/scenarios.mjs",
+    "verifier-mots": "node src/verifier-base-mots.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
