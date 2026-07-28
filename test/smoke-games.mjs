@@ -105,6 +105,32 @@ async function main() {
     bots.forEach((b) => b.ws.close());
   }
 
+  // ASSASSIN (min 3)
+  console.log('\nASSASSIN');
+  {
+    const { bots, host } = await lancer('assassin', 4, { rounds: 1 });
+    const g = host.state.game;
+    check('démarré en ingame', g.game === 'assassin' && g.phase === 'play');
+    check('table de 4 sièges', Array.isArray(g.seats) && g.seats.length === 4);
+    check('sièges masqués dans le public', g.seats.every((s) => !s.revealed && s.name === undefined));
+    check('siège + cible reçus en privé', bots.every((b) => b.secret && Number.isInteger(b.secret.seat) && b.secret.target && typeof b.secret.target.name === 'string'));
+    check('cible ABSENTE du public (pas de fuite de siège)', !JSON.stringify(g).match(/"target"/));
+    // Chuchotement livré au bon destinataire (identifié par son siège).
+    const b0 = bots[0];
+    const dest = bots.find((b) => b !== b0 && b.secret);
+    b0.send({ t: 'game', action: 'whisper', seat: dest.secret.seat, text: 'ping-secret' });
+    await until(() => (dest.secret.chats || []).some((c) => c.seat === b0.secret.seat && c.messages.some((m) => !m.mine && m.text === 'ping-secret')), 3000);
+    check('chuchotement reçu par le destinataire', (dest.secret.chats || []).some((c) => c.seat === b0.secret.seat && c.messages.some((m) => !m.mine)));
+    // Tir : met fin à la manche (suspense), puis révélation.
+    const cible = [0, 1, 2, 3].find((s) => s !== b0.secret.seat);
+    b0.send({ t: 'game', action: 'shoot', seat: cible });
+    await until(() => host.state.game.phase === 'suspense', 3000);
+    check('un tir met la manche en suspense', host.state.game.phase === 'suspense');
+    await until(() => host.state.game.phase === 'reveal', 5000);
+    check('révélation : sièges dévoilés', host.state.game.seats.every((s) => s.revealed));
+    bots.forEach((b) => b.ws.close());
+  }
+
   console.log(`\n═══════════════════════════════════════`);
   console.log(`  Smoke jeux : ${ok} OK / ${ko} échec(s)`);
   console.log(`═══════════════════════════════════════`);

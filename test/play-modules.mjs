@@ -228,6 +228,97 @@ section('Pinturillo : dessin relayé, devinette à la vitesse, manches');
   check('classement final présent', Array.isArray(G(room).publicState().ranking));
 }
 
+// ── ASSASSIN ─────────────────────────────────────────────────────────────────
+section('Assassin (classique) : dérangement, brouillard, chuchotement, tir');
+{
+  const { room, ids } = creerRoom('assassin', 5, { rounds: 1 });
+  const g = G(room);
+  check('démarre en phase play', g.phase === 'play' && g.mode === 'classic');
+  // Cibles : chacune distincte, aucune sur soi (dérangement).
+  const tg = g.targets;
+  check('chacun a une cible ≠ soi', ids.every((id) => tg[id] && tg[id] !== id));
+  check('2 personnes n’ont jamais la même cible', new Set(ids.map((id) => tg[id])).size === ids.length);
+  // Sièges : ordre unique, chacun a une place.
+  check('sièges uniques (0..n-1)', new Set(g.seats).size === ids.length && g.seats.length === ids.length);
+  // Brouillard : l'état public ne dévoile aucun visage en jeu.
+  check('sièges masqués dans l’état public', G(room).publicState().seats.every((s) => !s.revealed && s.name === undefined));
+  // Secret : chacun voit SON siège et SA cible (nom), pas ceux des autres.
+  const p0 = room.trouver(ids[0]);
+  const sec0 = g.secretFor(p0);
+  check('secret : mon siège + ma cible nommée', Number.isInteger(sec0.seat) && sec0.target && typeof sec0.target.name === 'string');
+  // Chuchotement de siège à siège, dans les deux sens.
+  const seatA = g.seatOf[ids[0]];
+  const other = ids.find((id) => id !== ids[0]);
+  const seatB = g.seatOf[other];
+  act(room, ids[0], 'whisper', { seat: seatB, text: 'psst, qui es-tu ?' });
+  const chB = g.secretFor(room.trouver(other)).chats.find((c) => c.seat === seatA);
+  check('le destinataire voit le chuchotement (venant de mon siège)', chB && chB.messages.some((m) => !m.mine && m.text.includes('psst')));
+  const chA = g.secretFor(p0).chats.find((c) => c.seat === seatB);
+  check('l’émetteur voit son propre message (mine:true)', chA && chA.messages.some((m) => m.mine));
+  // On ne peut pas se chuchoter à soi-même.
+  check('pas d’auto-chuchotement', act(room, ids[0], 'whisper', { seat: seatA, text: 'x' }).error);
+  // Tir juste : le tireur vise le siège de SA cible → +1.
+  const shooter = ids[0];
+  act(room, shooter, 'shoot', { seat: g.seatOf[tg[shooter]] });
+  check('tir sur la bonne cible → +1', room.trouver(shooter).score === 1);
+  check('après un tir : plus personne ne peut tirer (suspense)', G(room).phase === 'suspense');
+  check('un autre tir est refusé', act(room, ids[1], 'shoot', { seat: 0 }).error);
+  room.avancerMinuteur(); // suspense → reveal
+  check('révélation : tous les visages dévoilés', G(room).publicState().seats.every((s) => s.revealed));
+  check('détail du tir présent au révélé', (G(room).publicState().results || []).length === 1);
+  room.avancerMinuteur(); // reveal → fin (rounds:1)
+  check('fin de partie + classement', G(room).phase === 'over' && Array.isArray(G(room).publicState().ranking));
+}
+// Assassin : tir sur la MAUVAISE cible → −1.
+{
+  const { room, ids } = creerRoom('assassin', 5, { rounds: 1 });
+  const g = G(room);
+  const shooter = ids[0];
+  const mySeat = g.seatOf[shooter];
+  const goodSeat = g.seatOf[g.targets[shooter]];
+  const wrongSeat = [0, 1, 2, 3, 4].find((s) => s !== mySeat && s !== goodSeat);
+  act(room, shooter, 'shoot', { seat: wrongSeat });
+  check('tir sur la mauvaise cible → −1', room.trouver(shooter).score === -1);
+}
+// Assassin (équipes) : binômes secrets, tir synchronisé, mot d'équipe.
+section('Assassin (équipes) : binômes secrets, tir à deux, mots secrets');
+{
+  const { room, ids } = creerRoom('assassin', 4, { teamMode: true, rounds: 1 });
+  const g = G(room);
+  check('mode équipes actif', g.mode === 'teams');
+  check('2 équipes de 2', g.teams.length === 2 && g.teams.every((t) => t.length === 2));
+  check('mots secrets distincts par équipe', new Set(Object.values(g.words)).size === 2);
+  const t0 = g.teams[0];
+  check('coéquipiers visent la MÊME équipe adverse', g.teamOf[g.targets[t0[0]]] === g.teamOf[g.targets[t0[1]]] && g.teamOf[g.targets[t0[0]]] !== 0);
+  check('cibles des coéquipiers distinctes', g.targets[t0[0]] !== g.targets[t0[1]]);
+  check('mot d’équipe transmis au joueur (secret)', typeof g.secretFor(room.trouver(t0[0])).teamWord === 'string');
+  // Un seul membre vise → le tir ne part pas.
+  act(room, t0[0], 'shoot', { seat: g.seatOf[g.targets[t0[0]]] });
+  check('un seul a visé → toujours en jeu', G(room).phase === 'play');
+  check('binôme prêt 1/2 (secret)', g.secretFor(room.trouver(t0[0])).teamLocked.locked === 1);
+  // Le second vise juste → résolution : les deux cibles exactes → +1 chacun.
+  act(room, t0[1], 'shoot', { seat: g.seatOf[g.targets[t0[1]]] });
+  check('les deux visent juste → +1 chacun', room.trouver(t0[0]).score === 1 && room.trouver(t0[1]).score === 1);
+  check('après tir du binôme → suspense', G(room).phase === 'suspense');
+}
+{
+  // Une cible fausse dans le binôme → −1 chacun.
+  const { room } = creerRoom('assassin', 4, { teamMode: true, rounds: 1 });
+  const g = G(room);
+  const t0 = g.teams[0];
+  act(room, t0[0], 'shoot', { seat: g.seatOf[g.targets[t0[0]]] }); // juste
+  const mySeat1 = g.seatOf[t0[1]];
+  const good1 = g.seatOf[g.targets[t0[1]]];
+  const wrong1 = [0, 1, 2, 3].find((s) => s !== mySeat1 && s !== good1);
+  act(room, t0[1], 'shoot', { seat: wrong1 }); // faux
+  check('une cible fausse → −1 chacun', room.trouver(t0[0]).score === -1 && room.trouver(t0[1]).score === -1);
+}
+{
+  // Nombre impair en mode équipes → repli propre sur le classique.
+  const { room } = creerRoom('assassin', 5, { teamMode: true });
+  check('impair → mode classique forcé', G(room).mode === 'classic' && G(room).publicState().coercedClassic === true);
+}
+
 // ── TIMERS RÉGLABLES (0 = ∞) ───────────────────────────────────────────────
 section('Timer réglable : Fusion & Pinturillo (0 = infini)');
 {

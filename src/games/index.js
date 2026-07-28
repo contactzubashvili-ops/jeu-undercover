@@ -6,6 +6,7 @@ import { TimeBombGame } from './timebomb.js';
 import { BombPartyGame } from './bombparty.js';
 import { WordScatterGame } from './wordscatter.js';
 import { PinturilloGame } from './pinturillo.js';
+import { AssassinGame } from './assassin.js';
 
 export const GAME_MODULES = {
   fusion: FusionGame,
@@ -14,6 +15,7 @@ export const GAME_MODULES = {
   bombparty: BombPartyGame,
   wordscatter: WordScatterGame,
   pinturillo: PinturilloGame,
+  assassin: AssassinGame,
 };
 
 export function makeGame(id, room) {

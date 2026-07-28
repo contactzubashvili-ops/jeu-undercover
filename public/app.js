@@ -352,6 +352,7 @@ function selectedGamePanel(st, isHost) {
   else if (g.id === 'pinturillo') body.append(pinturilloConfig(st, isHost));
   else if (g.id === 'ladder') body.append(ladderConfig(st, isHost));
   else if (g.id === 'timebomb') body.append(timebombConfig(st, isHost));
+  else if (g.id === 'assassin') body.append(assassinConfig(st, isHost));
   else if (!g.available) body.append(h('p', { class: 'hint-line' }, '⏳ Ce jeu arrive très bientôt sur la plateforme.'));
   return body;
 }
@@ -365,6 +366,25 @@ function timebombConfig(st, isHost) {
   return h('div', { class: 'stack' },
     field('Nombre de traîtres (0 = auto)', cfgNum('timebombTraitors', cur, 0, Math.max(1, conn - 1))),
     h('p', { class: 'hint-line' }, `Auto = ${auto} pour ${conn} joueur(s). On ne peut pas recouper celui qui vient de couper.`),
+  );
+}
+
+function assassinConfig(st, isHost) {
+  const c = st.config;
+  const conn = st.players.filter((p) => p.connected).length;
+  const equipesOk = c.teamMode && conn >= 4 && conn % 2 === 0;
+  if (!isHost) {
+    return h('div', { class: 'muted small' },
+      `${c.rounds} manche(s) · ${c.teamMode ? (equipesOk ? 'binômes secrets' : 'équipes (nombre pair requis)') : 'chacun sa cible'}`);
+  }
+  return h('div', { class: 'stack' },
+    field('Manches', cfgNum('rounds', c.rounds, 1, 20)),
+    toggleRow('Mode équipes (binômes secrets)', c.teamMode, (v) => send({ t: 'config', patch: { teamMode: v } })),
+    c.teamMode
+      ? h('p', { class: 'hint-line' }, equipesOk
+          ? `👥 ${conn / 2} binômes tirés au sort et cachés. Chaque équipe a un mot secret pour se reconnaître ; les deux doivent tirer pour marquer.`
+          : `⚠️ Le mode équipes demande un nombre PAIR d’au moins 4 joueurs (actuellement ${conn}). Sinon la partie se jouera en classique.`)
+      : h('p', { class: 'hint-line' }, '🎯 Chacun a une cible différente. Chuchotez pour la localiser, puis tirez. Bonne cible +1, mauvaise −1.'),
   );
 }
 

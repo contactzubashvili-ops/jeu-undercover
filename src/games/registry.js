@@ -82,6 +82,17 @@ export const GAMES = [
     durMin: 10, durMax: 25,
     available: true,
   },
+  {
+    id: 'assassin',
+    name: 'Assassin',
+    tagline: 'Trouvez votre cible. Tirez.',
+    description: 'Tous assis en cercle, mais vous ne voyez que votre place — les autres sont masqués. Chuchotez pour démasquer votre cible, puis tirez sans vous tromper. En équipes, des binômes secrets frappent à deux.',
+    icon: '🎯',
+    accent: '#d64550',
+    min: 3, max: 10, recommended: '4 à 8',
+    durMin: 10, durMax: 20,
+    available: true,
+  },
 ];
 
 export const GAMES_BY_ID = Object.fromEntries(GAMES.map((g) => [g.id, g]));
