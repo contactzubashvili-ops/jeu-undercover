@@ -183,7 +183,7 @@ function makeCtx() {
     secret: S.secret,
     pct, secLeft, timerEl,
     rerender: render,
-    fx: { sound: fx.sound, confetti: fx.confetti, flash: fx.flash },
+    fx: { sound: fx.sound, confetti: fx.confetti, flash: fx.flash, drumroll: fx.drumroll },
     setDrawHandler: (fn) => { drawHandler = fn; },
     card: (...kids) => h('div', { class: 'card stack' }, ...kids),
   };

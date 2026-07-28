@@ -29,7 +29,7 @@ export const META = { min: 3, max: 10 };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const SUSPENSE_SECONDS = 3;   // croix affichée, identités encore masquées
+const SUSPENSE_SECONDS = 5;   // croix affichée, roulement de tambours, identités masquées
 const REVEAL_HOLD = 6;        // durée du révélé avant la manche suivante
 const MAX_CHAT = 40;          // messages gardés par fil de chuchotement
 

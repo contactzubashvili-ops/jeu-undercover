@@ -1,7 +1,7 @@
 // ── ASSASSIN — vue client ───────────────────────────────────────────────────
 // Table ronde : chacun ne voit QUE son siège ; les autres sont masqués (« ? »).
 // On clique un « ? » pour CHUCHOTER (chat privé de siège à siège) ou TIRER.
-// Suspense de 3 s (croix) puis révélation des vrais visages et du résultat.
+// Suspense de 5 s (croix + roulement de tambours) puis révélation des visages.
 
 const ui = { round: -1, open: new Set(), active: null, drafts: {}, menu: null };
 
@@ -67,13 +67,19 @@ const CSS = `
 .as-team.fired{border-color:var(--red)}
 .as-team .wd{font-weight:800}
 .as-hint{font-size:.8rem;color:var(--muted);text-align:center}
+.as-drum{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;
+  letter-spacing:.04em;color:var(--gold);text-transform:uppercase;font-size:.82rem}
+.as-drum .dm{font-size:1.5rem;display:inline-block;animation:asDrum .18s linear infinite}
+@keyframes asDrum{0%{transform:rotate(-12deg) translateY(0)}25%{transform:rotate(10deg) translateY(-2px)}
+  50%{transform:rotate(-8deg) translateY(0)}75%{transform:rotate(12deg) translateY(-2px)}100%{transform:rotate(-12deg) translateY(0)}}
+.reduce-anim .as-drum .dm{animation:none}
 `;
 
 export function view(g, ctx) {
   injectCss('assassin', CSS);
   const { h } = ctx;
   if (!g || !g.seats) return h('div', { class: 'card waiting' }, h('div', { class: 'spinner' }), 'Préparation de la table…');
-  if (g.round !== ui.round) { ui.round = g.round; ui.open = new Set(); ui.active = null; ui.drafts = {}; ui.menu = null; }
+  if (g.round !== ui.round) { ui.round = g.round; ui.open = new Set(); ui.active = null; ui.drafts = {}; ui.menu = null; ui.sfxKey = null; }
   if (g.phase === 'over') return overView(g, ctx);
   if (g.phase === 'suspense' || g.phase === 'reveal') return revealView(g, ctx);
   return playView(g, ctx);
@@ -135,14 +141,7 @@ function actionMenu(g, ctx) {
   const { h, gameSend } = ctx;
   const seat = ui.menu;
   if (seat == null) return '';
-  const tir = () => {
-    if (g.mode === 'classic') {
-      if (!confirm(`Tirer sur la Place ${seat + 1} ? Si ce n’est pas ta cible, tu perds un point.`)) return;
-      gameSend('shoot', { seat }); ui.menu = null; ctx.rerender();
-    } else {
-      gameSend('shoot', { seat }); ui.menu = null; ctx.rerender(); // verrouille (re-clic = annuler)
-    }
-  };
+  const tir = () => { gameSend('shoot', { seat }); ui.menu = null; ctx.rerender(); }; // tir direct (classique) / verrouillage (équipes, re-clic = annuler)
   const parle = () => { ui.open.add(seat); ui.active = seat; ui.menu = null; ctx.rerender(); };
   const locked = (ctx.secret || {}).myShot === seat;
   return h('div', { class: 'as-menu' },
@@ -238,11 +237,19 @@ function revealView(g, ctx) {
   const { h, gameSend, isHost } = ctx;
   const w = h('div', { class: 'stack' });
   const suspense = g.phase === 'suspense';
+  // Sons : roulement de tambours à l'entrée du suspense, puis verdict au révélé.
+  if (suspense && ui.sfxKey !== 'susp') { ui.sfxKey = 'susp'; ctx.fx.drumroll && ctx.fx.drumroll(4.8); }
+  if (!suspense && ui.sfxKey !== 'rev') {
+    ui.sfxKey = 'rev';
+    const mien = (g.results || []).find((r) => r.shooterId === ctx.myId);
+    if (ctx.fx.sound) ctx.fx.sound(mien ? (mien.correct ? 'win' : 'lose') : 'reveal');
+  }
   w.append(h('div', { class: 'phase-banner', style: 'margin:0' },
     h('span', { class: 'kicker' }, `Manche ${g.round}/${g.totalRounds}`),
     h('h2', {}, suspense ? '💥 Coup de feu !' : '🎭 Révélation'),
     h('p', {}, suspense ? 'Qui a été touché ? Les visages se dévoilent…' : 'Voici qui était assis où.'),
   ));
+  if (suspense) w.append(h('div', { class: 'as-drum' }, h('span', { class: 'dm' }, '🥁'), 'Roulement de tambours…'));
   w.append(tableEl(g, ctx, { interactive: false }));
   if (!suspense) {
     w.append(resultsCard(g, ctx));

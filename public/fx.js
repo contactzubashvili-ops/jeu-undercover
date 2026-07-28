@@ -45,6 +45,24 @@ export function sound(name) {
   }
 }
 
+// Roulement de tambours (tension avant une révélation) : une série de coups de
+// caisse claire qui ACCÉLÈRENT, puis un accent final (cymbale + grosse caisse)
+// calé sur le moment de la révélation.
+export function drumroll(dur = 1.4) {
+  if (!S.sound) return;
+  const ctx = ac(); if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  let t = 0, gap = 0.085;
+  while (t < dur - 0.12) {
+    noiseBurst(0.035, 0.05, { type: 'bandpass', freq: 1850 }, t); // frappe de caisse claire
+    t += gap;
+    gap = Math.max(0.028, gap * 0.94);                            // le roulement s'emballe
+  }
+  const fin = Math.max(0, dur - 0.04);
+  noiseBurst(0.30, 0.13, { type: 'highpass', freq: 3200 }, fin);  // cymbale (crash)
+  noiseBurst(0.20, 0.11, { type: 'lowpass', freq: 170 }, fin);    // grosse caisse
+}
+
 // ── Sons custom par emote (synthèse) ───────────────────────────────────────
 function glide(f0, f1, dur, type, g, delay) {
   const ctx = ac(); if (!ctx) return;
