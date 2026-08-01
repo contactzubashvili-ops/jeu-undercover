@@ -208,6 +208,7 @@ function router(ws, msg) {
     case 'avatar': room.setAvatar(pid, msg.avatar); break;
     case 'selectGame': room.setGame(pid, msg.gameId); break;
     case 'config': room.setConfig(pid, msg.patch || {}); break;
+    case 'customWord': room.motPerso(pid, msg.act, msg.word); break;
     case 'kick': room.kick(pid, msg.targetId); break;
     case 'start': r = room.demarrer(pid); break;
     case 'startClues': room.lancerIndices(pid); break;

@@ -38,6 +38,7 @@ const CONFIG_DEFAUT = {
   submitSeconds: 0,       // Fusion : temps pour répondre (0 = infini)
   // Pinturillo :
   roundSeconds: 75,       // temps par dessin (0 = infini)
+  pinturilloCustom: false,// autoriser chaque joueur à ajouter des mots persos (cachés des autres)
   // Échelle :
   ladderThemes: [],       // échelles personnalisées
   ladderOnlyCustom: false,// n'utiliser que les échelles perso
@@ -245,6 +246,24 @@ export class GameRoom {
     if (patch.ladderOnlyCustom != null) c.ladderOnlyCustom = !!patch.ladderOnlyCustom;
     // Time Bomb : nombre de traîtres.
     if (patch.timebombTraitors != null) c.timebombTraitors = clamp(parseInt(patch.timebombTraitors, 10) || 0, 0, 7);
+    // Pinturillo : mots persos autorisés.
+    if (patch.pinturilloCustom != null) c.pinturilloCustom = !!patch.pinturilloCustom;
+  }
+
+  // Pinturillo : un joueur ajoute/retire ses propres mots (cachés des autres,
+  // pour éviter le spoil). Uniquement dans le salon et si l'hôte l'a autorisé.
+  motPerso(playerId, action, word) {
+    if (this.phase !== PHASES.LOBBY || !this.config.pinturilloCustom) return;
+    const p = this.trouver(playerId);
+    if (!p) return;
+    if (!Array.isArray(p.customWords)) p.customWords = [];
+    if (action === 'clear') { p.customWords = []; return; }
+    if (action === 'remove') { p.customWords = p.customWords.filter((w) => w !== word); return; }
+    // action « add »
+    const clean = String(word || '').trim().slice(0, 40);
+    if (!clean || p.customWords.length >= 100) return;                       // plafond par joueur
+    if (p.customWords.some((w) => w.toLowerCase() === clean.toLowerCase())) return; // pas de doublon
+    p.customWords.push(clean);
   }
 
   kick(hostId, targetId) {
@@ -289,7 +308,13 @@ export class GameRoom {
       this.game = makeGame(this.selectedGameId, this);
       if (!this.game) return { error: 'Jeu indisponible.' };
       this.phase = 'ingame';
-      this.game.start(this.config);
+      // Pinturillo : agrège les mots persos de tous les joueurs (cachés jusqu'ici).
+      let cfg = this.config;
+      if (this.selectedGameId === 'pinturillo' && this.config.pinturilloCustom) {
+        const mots = this.players.flatMap((p) => (Array.isArray(p.customWords) ? p.customWords : []));
+        cfg = Object.assign({}, this.config, { customWords: mots });
+      }
+      this.game.start(cfg);
     }
     return { ok: true };
   }
@@ -778,6 +803,7 @@ export class GameRoom {
       isHost: p.id === this.hostId, connected: p.connected, ready: p.ready,
       score: p.score || 0, wins: p.wins || 0, losses: p.losses || 0,
       stats: p.stats,
+      customCount: (p.customWords || []).length, // Pinturillo : NB de mots persos (jamais les mots)
     }));
   }
 
@@ -831,6 +857,7 @@ export class GameRoom {
         losses: p.losses,
         roundsPlayed: p.roundsPlayed,
         stats: p.stats,
+        customCount: (p.customWords || []).length, // Pinturillo : NB de mots persos (jamais les mots)
       })),
       history: this.history,
       clueOrder: this.clueOrder.slice(),
@@ -881,7 +908,7 @@ export class GameRoom {
     const pub = this.publicState();
     for (const p of this.players) {
       if (!p.socket) continue;
-      safeSend(p.socket, { t: 'room', you: p.id, state: pub });
+      safeSend(p.socket, { t: 'room', you: p.id, state: pub, mine: { customWords: p.customWords || [] } });
       // Secret privé, uniquement pour le joueur concerné.
       let secret = null;
       if (this.game) secret = this.game.secretFor(p);

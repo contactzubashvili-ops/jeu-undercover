@@ -131,6 +131,29 @@ async function main() {
     bots.forEach((b) => b.ws.close());
   }
 
+  // CHAMELEON (min 3)
+  console.log('\nCHAMELEON');
+  {
+    const { bots, host } = await lancer('chameleon', 4, { rounds: 1 });
+    const g = host.state.game;
+    check('démarré en clues + 16 mots', g.game === 'chameleon' && g.phase === 'clues' && Array.isArray(g.words) && g.words.length === 16);
+    check('catégorie affichée à tous', typeof g.categorie === 'string' && g.categorie.length > 0);
+    check('mot privé : null au Caméléon, présent aux autres', bots.some((b) => b.secret && b.secret.isChameleon === true && b.secret.word === null) && bots.some((b) => b.secret && b.secret.word));
+    check('mot secret + Caméléon ABSENTS du public', g.secret == null && !JSON.stringify(g).match(/chameleonId/));
+    bots.forEach((b) => b.ws.close());
+  }
+
+  // CODENAMES (2 c. 2 = 4)
+  console.log('\nCODENAMES');
+  {
+    const { bots, host } = await lancer('codenames', 4);
+    const g = host.state.game;
+    check('démarré en play + 25 mots', g.game === 'codenames' && g.board.length === 25);
+    check('couleurs masquées côté public', g.board.every((c) => c.revealed || c.type === null));
+    check('espion voit la clé (25), agent non', bots.some((b) => b.secret && b.secret.spymaster === true && Array.isArray(b.secret.key) && b.secret.key.length === 25) && bots.some((b) => b.secret && b.secret.spymaster === false && b.secret.key === null));
+    bots.forEach((b) => b.ws.close());
+  }
+
   console.log(`\n═══════════════════════════════════════`);
   console.log(`  Smoke jeux : ${ok} OK / ${ko} échec(s)`);
   console.log(`═══════════════════════════════════════`);

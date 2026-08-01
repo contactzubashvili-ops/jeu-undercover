@@ -93,6 +93,28 @@ export const GAMES = [
     durMin: 10, durMax: 20,
     available: true,
   },
+  {
+    id: 'chameleon',
+    name: 'Chameleon',
+    tagline: 'Un intrus sans le mot.',
+    description: '16 mots d’une même catégorie devant tous. Tout le monde connaît le mot secret… sauf le Caméléon, qui doit se fondre dans la masse. Donnez un indice, débusquez l’intrus — ou devinez pour survivre.',
+    icon: '🦎',
+    accent: '#6bbf59',
+    min: 3, max: 12, recommended: '4 à 8',
+    durMin: 10, durMax: 20,
+    available: true,
+  },
+  {
+    id: 'codenames',
+    name: 'Codenames',
+    tagline: '2 contre 2, indices d’espions.',
+    description: 'Deux équipes, deux espions en chef. Une grille de 25 mots, un seul indice à la fois pour faire deviner vos agents — sans jamais toucher l’assassin. La première équipe à retrouver tous ses mots gagne.',
+    icon: '🕵️‍♂️',
+    accent: '#c9a227',
+    min: 4, max: 4, recommended: '4 (2 c. 2)',
+    durMin: 10, durMax: 25,
+    available: true,
+  },
 ];
 
 export const GAMES_BY_ID = Object.fromEntries(GAMES.map((g) => [g.id, g]));

@@ -78,6 +78,7 @@ function handleMessage(msg) {
     case 'room':
       fxReact(S.state, msg.state);
       S.state = msg.state;
+      if (msg.mine) S.mine = msg.mine;   // données PRIVÉES de lobby (mes mots persos)
       if (msg.you) S.playerId = msg.you;
       // Réinitialise l'état local à chaque changement de phase.
       const key = S.state.phase + '#' + S.state.round + '#' + S.state.cycle;
@@ -353,6 +354,8 @@ function selectedGamePanel(st, isHost) {
   else if (g.id === 'ladder') body.append(ladderConfig(st, isHost));
   else if (g.id === 'timebomb') body.append(timebombConfig(st, isHost));
   else if (g.id === 'assassin') body.append(assassinConfig(st, isHost));
+  else if (g.id === 'chameleon') body.append(chameleonConfig(st, isHost));
+  else if (g.id === 'codenames') body.append(codenamesConfig(st, isHost));
   else if (!g.available) body.append(h('p', { class: 'hint-line' }, '⏳ Ce jeu arrive très bientôt sur la plateforme.'));
   return body;
 }
@@ -366,6 +369,24 @@ function timebombConfig(st, isHost) {
   return h('div', { class: 'stack' },
     field('Nombre de traîtres (0 = auto)', cfgNum('timebombTraitors', cur, 0, Math.max(1, conn - 1))),
     h('p', { class: 'hint-line' }, `Auto = ${auto} pour ${conn} joueur(s). On ne peut pas recouper celui qui vient de couper.`),
+  );
+}
+
+function chameleonConfig(st, isHost) {
+  const c = st.config;
+  if (!isHost) return h('div', { class: 'muted small' }, `${c.rounds} manche(s) · vote à la majorité`);
+  return h('div', { class: 'stack' },
+    field('Manches', cfgNum('rounds', c.rounds, 1, 20)),
+    toggleRow('Vote quand +50 % sont prêts', c.voteReady, (v) => send({ t: 'config', patch: { voteReady: v } })),
+    h('p', { class: 'hint-line' }, '🦎 16 mots d’une même catégorie, un mot secret que tous connaissent sauf le Caméléon. Donnez un indice chacun votre tour, puis votez.'),
+  );
+}
+
+function codenamesConfig(st, isHost) {
+  const conn = st.players.filter((p) => p.connected).length;
+  return h('div', { class: 'stack' },
+    h('p', { class: 'hint-line' }, `🕵️‍♂️ 2 contre 2 (${conn}/4 connectés). Les équipes et les espions en chef sont tirés au sort au lancement.`),
+    h('p', { class: 'muted small' }, 'Chaque équipe : 1 espion en chef (voit les couleurs) + 1 agent (devine). Grille de 25 mots, évitez l’assassin.'),
   );
 }
 
@@ -408,10 +429,35 @@ function ladderConfig(st, isHost) {
 
 function pinturilloConfig(st, isHost) {
   const c = st.config;
-  if (!isHost) return h('div', { class: 'muted small' }, `${c.rounds} tour(s) · ${(c.roundSeconds || 0) === 0 ? 'temps illimité' : (c.roundSeconds + 's / dessin')}`);
-  return h('div', { class: 'grid-2' },
-    field('Tours (par joueur)', cfgNum('rounds', c.rounds, 1, 8)),
-    field('Temps/dessin (s, 0 = ∞)', cfgNum('roundSeconds', c.roundSeconds == null ? 75 : c.roundSeconds, 0, 300)),
+  const parts = h('div', { class: 'stack' });
+  if (isHost) {
+    parts.append(h('div', { class: 'grid-2' },
+      field('Tours (par joueur)', cfgNum('rounds', c.rounds, 1, 8)),
+      field('Temps/dessin (s, 0 = ∞)', cfgNum('roundSeconds', c.roundSeconds == null ? 75 : c.roundSeconds, 0, 300)),
+    ));
+    parts.append(toggleRow('Mots persos (chacun ajoute les siens, cachés)', c.pinturilloCustom, (v) => send({ t: 'config', patch: { pinturilloCustom: v } })));
+  } else {
+    parts.append(h('div', { class: 'muted small' }, `${c.rounds} tour(s) · ${(c.roundSeconds || 0) === 0 ? 'temps illimité' : (c.roundSeconds + 's / dessin')}`));
+  }
+  if (c.pinturilloCustom) parts.append(pinturilloCustomWords(st));
+  return parts;
+}
+
+// Bloc « mes mots persos » : visible par CHAQUE joueur, mais chacun ne voit QUE
+// ses propres mots (anti-spoil). Les autres n'ont que le compteur.
+function pinturilloCustomWords(st) {
+  const mine = (S.mine && S.mine.customWords) || [];
+  const add = () => { const v = (S.pintWordDraft || '').trim(); if (!v) return; send({ t: 'customWord', act: 'add', word: v }); S.pintWordDraft = ''; };
+  const inp = h('input', { class: 'input', maxlength: 40, placeholder: 'ex. Dobby, Excalibur, Choco BN…', value: S.pintWordDraft || '', oninput: (e) => { S.pintWordDraft = e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') add(); } });
+  const chips = h('div', { class: 'chip-row' }, ...mine.map((w) => h('button', { class: 'chip on', title: 'Retirer', onclick: () => send({ t: 'customWord', act: 'remove', word: w }) }, w + ' ✕')));
+  const autres = st.players.filter((p) => p.id !== S.playerId && (p.customCount || 0) > 0);
+  return h('div', { class: 'card stack' },
+    h('div', { class: 'lbl-row' }, h('span', {}, '✏️ Tes mots persos'), h('span', { class: 'muted small' }, `${mine.length} ajouté(s)`)),
+    h('p', { class: 'hint-line' }, 'Toi seul vois tes mots ; ils sortiront en priorité pendant la partie. Personne d’autre ne peut les lire → pas de spoil.'),
+    h('div', { style: 'display:flex;gap:8px' }, inp, h('button', { class: 'btn btn-primary btn-sm', onclick: add }, 'Ajouter')),
+    mine.length ? chips : '',
+    mine.length ? h('button', { class: 'btn btn-ghost btn-sm', style: 'align-self:flex-start', onclick: () => send({ t: 'customWord', act: 'clear' }) }, '🗑️ Tout effacer') : '',
+    autres.length ? h('p', { class: 'muted small' }, 'Autres joueurs : ' + autres.map((p) => `${p.name} (${p.customCount})`).join(' · ')) : '',
   );
 }
 
@@ -639,6 +685,23 @@ function viewReveal() {
 }
 
 // ── Vue : indices ──────────────────────────────────────────────────────────
+// Historique permanent des indices (à travers les tours qui bouclent) — affiché
+// dans TOUTES les phases de jeu pour rester visible en continu, même sans vote.
+function clueHistoryCard(title = 'Tous les indices') {
+  const st = S.state;
+  if (!st.clues || !st.clues.length) return '';
+  const list = h('div', { class: 'clue-list' });
+  for (const c of st.clues) {
+    const p = st.players.find((x) => x.id === c.playerId);
+    list.append(h('div', { class: 'clue-item' },
+      h('div', { class: 'av' }, p ? p.avatar : '❓'),
+      h('div', { class: 'cn' }, `${c.name}${st.cycle > 1 ? ' · tour ' + c.cycle : ''}`),
+      h('div', { class: 'ct' }, c.text),
+    ));
+  }
+  return h('div', { class: 'card stack' }, h('div', { class: 'kicker' }, `${title} (${st.clues.length})`), list);
+}
+
 function viewClues() {
   const st = S.state;
   const me = myPlayer();
@@ -675,18 +738,7 @@ function viewClues() {
   }
 
   // Tous les indices (historique permanent, à travers les tours qui bouclent).
-  if (st.clues.length) {
-    const list = h('div', { class: 'clue-list' });
-    for (const c of st.clues) {
-      const p = st.players.find((x) => x.id === c.playerId);
-      list.append(h('div', { class: 'clue-item' },
-        h('div', { class: 'av' }, p ? p.avatar : '❓'),
-        h('div', { class: 'cn' }, c.name),
-        h('div', { class: 'ct' }, c.text),
-      ));
-    }
-    w.append(h('div', { class: 'card stack' }, h('div', { class: 'kicker' }, `Indices (${st.clues.length})`), list));
-  }
+  w.append(clueHistoryCard('Indices'));
 
   // Prêt à voter — disponible À TOUT MOMENT pendant les indices.
   const d = st.discussion || {};
@@ -724,16 +776,7 @@ function viewDiscussion() {
   w.append(gameTopbar(`Manche ${st.round}`), phaseBanner('discussion'));
 
   // Récap de tous les indices de la manche
-  const list = h('div', { class: 'clue-list' });
-  for (const c of st.clues) {
-    const p = st.players.find((x) => x.id === c.playerId);
-    list.append(h('div', { class: 'clue-item' },
-      h('div', { class: 'av' }, p ? p.avatar : '❓'),
-      h('div', { class: 'cn' }, `${c.name}${st.cycle > 1 ? ' · tour ' + c.cycle : ''}`),
-      h('div', { class: 'ct' }, c.text),
-    ));
-  }
-  if (st.clues.length) w.append(h('div', { class: 'card stack' }, h('div', { class: 'kicker' }, 'Tous les indices'), list));
+  w.append(clueHistoryCard('Tous les indices'));
   w.append(mySecretReminder());
 
   // Prêt à voter (majorité) — remplace le minuteur.
@@ -798,6 +841,9 @@ function viewVote() {
     h('div', { class: 'vote-bar' }, h('i', { style: `width:${pct(st.vote?.votedCount, st.vote?.totalVoters)}%` })),
   ));
 
+  // Les indices restent sous les yeux pendant le vote.
+  w.append(clueHistoryCard('Rappel des indices'));
+
   if (!alive) {
     w.append(h('p', { class: 'hint-line' }, '👻 Éliminé — vous ne pouvez plus voter. Patientez.'));
   } else if (iVoted) {
@@ -847,6 +893,7 @@ function viewVoteReveal() {
   } else {
     w.append(h('div', { class: 'phase-banner' }, h('h2', {}, 'Aucune élimination'), h('p', {}, 'Personne n’a voté.')));
   }
+  w.append(clueHistoryCard('Rappel des indices'));
   w.append(h('p', { class: 'hint-line' }, h('span', { class: 'dots-anim' }, 'Suite')));
   return w;
 }
@@ -895,6 +942,7 @@ function viewMrWhite() {
     w.append(h('div', { class: 'card waiting' }, h('div', { class: 'spinner' }),
       h('div', { class: 'dots-anim' }, `${mw.name} (Mister White) écrit sa réponse`)));
   }
+  w.append(clueHistoryCard('Rappel des indices'));
   return w;
 }
 

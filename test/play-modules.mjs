@@ -319,6 +319,103 @@ section('Assassin (équipes) : binômes secrets, tir à deux, mots secrets');
   check('impair → mode classique forcé', G(room).mode === 'classic' && G(room).publicState().coercedClassic === true);
 }
 
+// ── CHAMELEON ────────────────────────────────────────────────────────────────
+section('Chameleon : grille de 16, indices, vote, devinette du Caméléon');
+{
+  const { room, ids, host } = creerRoom('chameleon', 4, { rounds: 1 });
+  const g = G(room);
+  check('démarre en clues + 16 mots d’une catégorie', g.phase === 'clues' && g.words.length === 16 && typeof g.categorie === 'string');
+  check('mot secret parmi les 16', g.words.includes(g.secret));
+  const cham = g.chameleonId;
+  check('Caméléon sans mot (secret) + flag', g.secretFor(room.trouver(cham)).word === null && g.secretFor(room.trouver(cham)).isChameleon === true);
+  check('les autres reçoivent le mot secret', ids.filter((id) => id !== cham).every((id) => g.secretFor(room.trouver(id)).word === g.secret));
+  check('mot secret + identité du Caméléon ABSENTS du public', G(room).publicState().secret == null && G(room).publicState().players.every((p) => p.isChameleon === undefined));
+  // Un tour complet d'indices → on reboucle (cycle 2).
+  let garde = 0;
+  while (G(room).phase === 'clues' && G(room).cycle === 1 && garde++ < 12) { const a = G(room).order[G(room).activeIdx]; if (!a) break; act(room, a, 'clue', { text: 'indice' }); }
+  check('après un tour, on reboucle (indices gardés)', G(room).cycle >= 2 && G(room).clues.length >= ids.length);
+  // Vote : on élimine le Caméléon.
+  act(room, host, 'openVote');
+  check('vote ouvert', G(room).phase === 'vote');
+  const autre = ids.find((id) => id !== cham);
+  for (const id of ids) if (id !== cham) act(room, id, 'vote', { targetId: cham });
+  act(room, cham, 'vote', { targetId: autre }); // 4e vote → dépouillement
+  check('Caméléon démasqué → phase guess', G(room).phase === 'guess');
+  // Devinette juste → le Caméléon renverse la partie.
+  act(room, cham, 'guess', { text: G(room).secret });
+  check('devinette juste → le Caméléon gagne (+2)', G(room).phase === 'result' && G(room).mancheWinner === 'chameleon' && room.trouver(cham).score === 2);
+}
+{
+  // Devinette fausse → les joueurs gagnent (+1 chacun).
+  const { room, ids, host } = creerRoom('chameleon', 4, { rounds: 1 });
+  const g = G(room); const cham = g.chameleonId; const autre = ids.find((id) => id !== cham);
+  act(room, host, 'openVote');
+  for (const id of ids) if (id !== cham) act(room, id, 'vote', { targetId: cham });
+  act(room, cham, 'vote', { targetId: autre });
+  act(room, cham, 'guess', { text: 'zzzmauvaismot' });
+  check('devinette fausse → joueurs gagnent', G(room).mancheWinner === 'players');
+  check('chaque non-Caméléon marque +1', ids.filter((id) => id !== cham).every((id) => room.trouver(id).score === 1));
+}
+
+// ── CODENAMES (2 c. 2) ───────────────────────────────────────────────────────
+section('Codenames : grille 25, indices, devinette, assassin, victoire');
+{
+  const { room } = creerRoom('codenames', 4);
+  const g = G(room);
+  check('démarre en play + 25 mots', g.phase === 'play' && g.board.length === 25);
+  check('9 rouges + 8 bleus + 7 neutres + 1 assassin', g.board.filter((c) => c.type === 'red').length === 9 && g.board.filter((c) => c.type === 'blue').length === 8 && g.board.filter((c) => c.type === 'neutral').length === 7 && g.board.filter((c) => c.type === 'assassin').length === 1);
+  check('couleurs masquées dans le public', G(room).publicState().board.every((c) => c.revealed || c.type === null));
+  check('espion en chef voit la clé (25)', g.secretFor(room.trouver(g.teams.red.spy)).spymaster === true && g.secretFor(room.trouver(g.teams.red.spy)).key.length === 25);
+  check('agent ne voit PAS la clé', g.secretFor(room.trouver(g.teams.red.op)).spymaster === false && g.secretFor(room.trouver(g.teams.red.op)).key === null);
+  check('rouge commence, étape clue', g.turn === 'red' && g.step === 'clue');
+  check('seul l’espion rouge donne l’indice', !!act(room, g.teams.red.op, 'clue', { word: 'x', count: 2 }).error);
+  act(room, g.teams.red.spy, 'clue', { word: 'animal', count: 2 });
+  check('indice → étape guess (essais = nb+1)', G(room).step === 'guess' && G(room).clue.word === 'animal' && G(room).guessesLeft === 3);
+  const redIdx = g.board.findIndex((c) => c.type === 'red' && !c.revealed);
+  act(room, g.teams.red.op, 'guess', { index: redIdx });
+  check('bon mot rouge → +1 rouge, toujours à rouge', G(room).found.red === 1 && G(room).turn === 'red');
+  act(room, g.teams.red.op, 'endTurn');
+  check('fin de tour → bleu, étape clue', G(room).turn === 'blue' && G(room).step === 'clue');
+}
+{
+  // Assassin → défaite immédiate de l'équipe active.
+  const { room } = creerRoom('codenames', 4);
+  const g = G(room);
+  act(room, g.teams.red.spy, 'clue', { word: 'x', count: 1 });
+  const assIdx = g.board.findIndex((c) => c.type === 'assassin');
+  act(room, g.teams.red.op, 'guess', { index: assIdx });
+  check('assassin touché → l’autre équipe gagne', G(room).phase === 'over' && G(room).winner === 'blue');
+  check('équipe gagnante marque', room.trouver(g.teams.blue.spy).score === 1 && room.trouver(g.teams.blue.op).score === 1);
+}
+{
+  // Rouge retrouve ses 9 mots → victoire rouge.
+  const { room } = creerRoom('codenames', 4);
+  const g = G(room);
+  act(room, g.teams.red.spy, 'clue', { word: 'x', count: 9 });
+  let garde = 0;
+  while (G(room).phase === 'play' && garde++ < 12) { const idx = G(room).board.findIndex((c) => c.type === 'red' && !c.revealed); if (idx < 0) break; act(room, g.teams.red.op, 'guess', { index: idx }); }
+  check('9 mots rouges retrouvés → rouge gagne', G(room).phase === 'over' && G(room).winner === 'red');
+}
+
+// ── PINTURILLO : mots persos (cachés des autres, tirés en priorité) ──────────
+section('Pinturillo : mots persos ajoutés dans le salon (anti-spoil)');
+{
+  const room = new GameRoom('TEST'); room.brancherDiffusion(() => room.diffuser());
+  const ids = []; for (let i = 0; i < 3; i++) ids.push(room.nouveauJoueur('J' + i, fakeWs()).id);
+  const host = room.hostId;
+  room.setGame(host, 'pinturillo');
+  room.setConfig(host, { rounds: 1, roundSeconds: 0, pinturilloCustom: true });
+  room.motPerso(ids[0], 'add', 'Zorglub'); room.motPerso(ids[0], 'add', 'Excalibur');
+  room.motPerso(ids[1], 'add', 'Choco');
+  check('compteur perso public (jamais les mots)', room.publicState().players.find((p) => p.id === ids[0]).customCount === 2);
+  check('mots persos ABSENTS de l’état public', !JSON.stringify(room.publicState()).match(/Zorglub|Excalibur|Choco/i));
+  check('doublon refusé', (room.motPerso(ids[0], 'add', 'zorglub'), room.trouver(ids[0]).customWords.length === 2));
+  room.demarrer(host);
+  const g = G(room);
+  check('mots persos chargés dans le module', g.customMots.length === 3);
+  check('le 1er mot tiré est un mot perso (priorité)', ['zorglub', 'excalibur', 'choco'].includes(g.word));
+}
+
 // ── TIMERS RÉGLABLES (0 = ∞) ───────────────────────────────────────────────
 section('Timer réglable : Fusion & Pinturillo (0 = infini)');
 {

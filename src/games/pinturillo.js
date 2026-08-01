@@ -49,6 +49,12 @@ export class PinturilloGame extends GameModule {
     this.roundSeconds = Number.isFinite(rs) ? clamp(rs, 0, 300) : 75; // 0 = ∞
     this.cycles = clamp(parseInt(config.rounds, 10) || 2, 1, 10);
     this.pointsFirst = clamp(parseInt(config.pointsFirst, 10) || 5, 2, 10);
+    // Mots persos (ajoutés par les joueurs dans le salon, cachés des autres) :
+    // conservés au « rejouer ». Tirés EN PRIORITÉ (voir _motInedit).
+    if (Array.isArray(config.customWords)) {
+      this.customMots = [...new Set(config.customWords.map((w) => String(w).trim().toLowerCase()).filter((w) => w.length >= 2 && w.length <= 40))];
+    }
+    this.customMots = this.customMots || [];
 
     this.order = melangerTableau(this.connectes).map((p) => p.id);
     this.totalDrawings = this.cycles * this.order.length;
@@ -88,9 +94,12 @@ export class PinturilloGame extends GameModule {
   }
 
   _motInedit() {
+    // Les mots persos passent d'abord (tous), puis on complète avec la liste de base.
+    const dispoCustom = (this.customMots || []).filter((w) => !this.usedWords.has(w));
+    const pool = dispoCustom.length ? dispoCustom : MOTS;
     let w = null;
-    for (let i = 0; i < 12; i++) { const c = MOTS[Math.floor(Math.random() * MOTS.length)]; if (!this.usedWords.has(c)) { w = c; break; } }
-    if (!w) w = MOTS[Math.floor(Math.random() * MOTS.length)];
+    for (let i = 0; i < 12; i++) { const c = pool[Math.floor(Math.random() * pool.length)]; if (!this.usedWords.has(c)) { w = c; break; } }
+    if (!w) w = pool[Math.floor(Math.random() * pool.length)];
     this.usedWords.add(w);
     return w;
   }
@@ -148,7 +157,7 @@ export class PinturilloGame extends GameModule {
     }
     if (action === 'restart') {
       if (!this.estHote(player.id) || this.phase !== 'over') return;
-      this.start({ roundSeconds: this.roundSeconds, rounds: this.cycles, pointsFirst: this.pointsFirst });
+      this.start({ roundSeconds: this.roundSeconds, rounds: this.cycles, pointsFirst: this.pointsFirst, customWords: this.customMots });
       return { ok: true };
     }
   }
